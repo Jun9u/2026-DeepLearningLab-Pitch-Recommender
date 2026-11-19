@@ -44,7 +44,7 @@ jobs:
         run: ruff check --select E4,E7,E9,F63,F7,F82 src web/backend tests
 
       - name: Run fast unit tests with coverage
-        run: python -m pytest -q tests --cov=src --cov=web.backend --cov-report=xml:coverage.xml --cov-report=term-missing
+        run: python -m pytest -q tests --ignore=tests/integration --cov=src --cov=web.backend --cov-report=xml:coverage.xml --cov-report=term-missing
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -53,3 +53,13 @@ jobs:
           flags: unittests
           use_oidc: true
           fail_ci_if_error: true
+
+      - name: Install integration test dependencies
+        run: |
+          torch_requirement="$(sed -n '/^torch==/p' requirements.txt)"
+          python -m pip install --disable-pip-version-check \
+            --index-url https://download.pytorch.org/whl/cpu "${torch_requirement}+cpu"
+          python -m pip install --disable-pip-version-check -r requirements.txt
+
+      - name: Run baseline integration tests
+        run: python -m unittest discover -s tests/integration -v
