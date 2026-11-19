@@ -20,6 +20,12 @@ MLB Statcast의 투구 단위 데이터를 이용해 **다음 구종 후보를 �
 - 별도의 `delta_run_exp` 경험적 추정 모듈은 테스트 데이터에서 **MAE 0.1314, RMSE 0.2408, R² 0.0088**을 기록했습니다. **설명력이 낮으므로 추천의 실제 경기 성과가 검증되었다고 해석할 수 없습니다.**
 - 수치는 저장소의 [Baseline 결과](outputs/baseline_results.csv), [LSTM 결과](outputs/lstm_weighted_macro_result.csv), [Transformer 결과](outputs/transformer_weighted_macro_result.csv), [경험적 추정 평가](outputs/outcome_empirical_eval.csv)에서 확인할 수 있습니다.
 
+### 한 투구의 추천 결과
+
+2025년 6월 2일, 8회 무사 주자 없는 상황에서 볼카운트는 2볼 0스트라이크였다. LSTM이 뽑은 다음 구종 후보는 포심(FF), 스플리터(FS), 싱커(SI) 순이었다.
+
+후보 구종과 투구 위치를 함께 평가한 결과 **싱커(SI)와 6번 존** 조합이 1위였다. 실제 투구는 9번 존에 들어온 슬라이더(SL)였고, 타자는 지켜봐서 스트라이크가 됐다. [해당 투구의 추천 결과 CSV](outputs/outcome_recommendation_sample.csv)
+
 ## 2. 문제 정의 및 시스템 구성
 
 야구의 다음 투구 선택은 이전 투구 흐름, 볼카운트, 투수의 구종 구성, 주자·아웃 상황 등에 영향을 받습니다. 본 프로젝트는 이 문제를 **구종 후보 예측**과 **과거 관측 결과 기반 후보 순위화**라는 두 단계로 분리했습니다.
