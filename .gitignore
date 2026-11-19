@@ -19,6 +19,11 @@ outputs/*
 !outputs/outcome_empirical_eval.csv
 !outputs/outcome_recommendation_sample.csv
 
+# Local credentials and secrets
+.env
+.env.*
+!.env.example
+
 # Python caches and virtual environments
 .venv/
 .venv_check/
