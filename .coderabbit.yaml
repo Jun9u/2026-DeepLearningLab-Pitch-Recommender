@@ -1,2 +1,59 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
 inheritance: true
 language: ko-KR
+
+tone_instructions: >-
+  한국어로 간결하게 리뷰하고, 문제의 영향과 수정 근거를
+  구체적으로 설명하세요. 불필요한 칭찬은 생략하세요.
+
+reviews:
+  profile: chill
+
+  high_level_summary: true
+  collapse_walkthrough: true
+  changed_files_summary: true
+  sequence_diagrams: false
+
+  suggested_labels: false
+  suggested_reviewers: false
+  in_progress_fortune: false
+  poem: false
+
+  auto_approvals:
+    enabled: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+    auto_pause_after_reviewed_commits: 2
+
+  path_filters:
+    - "!data/raw/**"
+    - "!**/__pycache__/**"
+    - "!**/.pytest_cache/**"
+    - "!**/coverage.xml"
+
+  path_instructions:
+    - path: "src/**"
+      instructions: |
+        Focus on:
+        - Data leakage across train, validation, and test splits.
+        - Inconsistency between preprocessing and inference.
+        - Incorrect model inputs, metrics, or ranking logic.
+        - Breaking existing behavior during refactoring.
+
+    - path: "web/**"
+      instructions: |
+        Focus on:
+        - API validation and error handling.
+        - Serving artifact compatibility.
+        - Incorrect recommendation and comparison results.
+
+    - path: "tests/**"
+      instructions: |
+        Focus on:
+        - Missing failure cases and edge cases.
+        - Tests that pass despite incorrect behavior.
+        - Regression coverage for existing behavior.
