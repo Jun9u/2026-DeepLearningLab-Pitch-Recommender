@@ -1,6 +1,10 @@
-from pathlib import Path
 import pandas as pd
 from pybaseball import statcast, cache
+
+if __package__:
+    from .run_paths import run_directory
+else:
+    from run_paths import run_directory
 
 
 
@@ -11,8 +15,8 @@ from pybaseball import statcast, cache
 START_DATE = "2023-03-01"
 END_DATE = "2025-09-27"
 
-RAW_DIR = Path("data/raw")
-RAW_DIR.mkdir(parents=True, exist_ok=True)
+RUN_DIR = run_directory()
+RAW_DIR = RUN_DIR / "data/raw"
 
 # 현재 피치타입 예측 모델에 필요한 기본 컬럼
 MODEL_COLS = [
@@ -101,6 +105,7 @@ def print_col_status(cols, target_cols, title):
 
 
 def main():
+    RAW_DIR.mkdir(parents=True, exist_ok=True)
     
     cache.enable()
     print("===== Statcast 데이터 다운로드 =====")

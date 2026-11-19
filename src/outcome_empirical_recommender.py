@@ -1,20 +1,25 @@
-from pathlib import Path
 import math
 import pandas as pd
 import numpy as np
 
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
+if __package__:
+    from .run_paths import run_directory
+else:
+    from run_paths import run_directory
+
 
 # =========================
 # 설정
 # =========================
 
-DATA_PATH = Path("data/processed/outcome_sequence_data.csv")
-LSTM_PRED_PATH = Path("outputs/lstm_weighted_macro_predictions.csv")
+RUN_DIR = run_directory()
+DATA_PATH = RUN_DIR / "data/processed/outcome_sequence_data.csv"
+LSTM_PRED_PATH = RUN_DIR / "results/lstm_weighted_macro_predictions.csv"
 
-EVAL_OUTPUT_PATH = Path("outputs/outcome_empirical_eval.csv")
-RECOMMEND_OUTPUT_PATH = Path("outputs/outcome_empirical_recommendations.csv")
+EVAL_OUTPUT_PATH = RUN_DIR / "results/outcome_empirical_eval.csv"
+RECOMMEND_OUTPUT_PATH = RUN_DIR / "results/outcome_empirical_recommendations.csv"
 
 TARGET_COL = "delta_run_exp"
 
@@ -81,12 +86,16 @@ def get_stat_score(stat, global_mean):
 
 
 def load_lstm_predictions(test_df):
-    if not LSTM_PRED_PATH.exists():
+    prediction_path = LSTM_PRED_PATH
+    if not prediction_path.exists():
+        prediction_path = RUN_DIR / "outputs" / prediction_path.name
+
+    if not prediction_path.exists():
         print("\nLSTM 예측 파일 없음. 투수별/전체 후보로 대체합니다.")
         test_df["top3_pitch_type"] = np.nan
         return test_df
 
-    pred_cols = pd.read_csv(LSTM_PRED_PATH, nrows=0).columns.tolist()
+    pred_cols = pd.read_csv(prediction_path, nrows=0).columns.tolist()
 
     needed = KEY_COLS + ["top3_pitch_type"]
     missing = [c for c in needed if c not in pred_cols]
@@ -96,7 +105,7 @@ def load_lstm_predictions(test_df):
         test_df["top3_pitch_type"] = np.nan
         return test_df
 
-    pred_df = pd.read_csv(LSTM_PRED_PATH, usecols=needed)
+    pred_df = pd.read_csv(prediction_path, usecols=needed)
     pred_df = pred_df.drop_duplicates(KEY_COLS)
 
     merged = test_df.merge(pred_df, on=KEY_COLS, how="left")

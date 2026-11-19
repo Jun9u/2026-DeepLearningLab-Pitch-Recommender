@@ -20,6 +20,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
 # train_lstm.py 안의 LSTMPitchModel 구조를 그대로 사용
+from src.run_paths import run_directory  # noqa: E402
 from src.train_lstm import LSTMPitchModel  # noqa: E402
 
 
@@ -27,8 +28,9 @@ from src.train_lstm import LSTMPitchModel  # noqa: E402
 # Artifact paths
 # ============================================================
 
-LSTM_ARTIFACT_PATH = PROJECT_ROOT / "models" / "lstm_serving_artifact.pt"
-OUTCOME_ARTIFACT_PATH = PROJECT_ROOT / "models" / "outcome_ranker_artifact.pkl"
+RUN_DIR = run_directory(PROJECT_ROOT)
+LSTM_ARTIFACT_PATH = RUN_DIR / "models" / "lstm_serving_artifact.pt"
+OUTCOME_ARTIFACT_PATH = RUN_DIR / "models" / "outcome_ranker_artifact.pkl"
 
 FRONTEND_PATH = PROJECT_ROOT / "web" / "frontend" / "index.html"
 

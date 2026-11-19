@@ -11,6 +11,10 @@ models/
 *.pth
 *.ckpt
 
+# Generated experiment files and isolated run directories
+results/
+runs/
+
 # Keep only selected, lightweight result summaries in Git
 outputs/*
 !outputs/baseline_results.csv

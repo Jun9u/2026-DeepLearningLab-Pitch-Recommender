@@ -5,16 +5,8 @@ import unittest
 
 import pandas as pd
 
-from tests.support import REPO, pitch, run_step, sparse_outcome_rows, write_csv
+from tests.support import PUBLIC_RESULTS, REPO, pitch, run_step, sparse_outcome_rows, write_csv
 
-
-PUBLIC_RESULTS = {
-    "baseline_results.csv": "62468d69c347170fa4d8efbbbfd83d7ece1ccffc7650e5cf1a40c64096a36449",
-    "lstm_weighted_macro_result.csv": "f29509374171fd672860d27bec4a561ba4abffc51431ba04e58357264055dc82",
-    "outcome_empirical_eval.csv": "3d5b0267800bc56034d2f657b0e56a1220e8accd2bfb708d18e40a684215f314",
-    "outcome_recommendation_sample.csv": "c6931fd84cb23c2b17f4c5db746245b7df41a69260dc85a96dac4abf3ac8759a",
-    "transformer_weighted_macro_result.csv": "f1a7c056aa3f34bb4cb18d3c401632a70b62d14523f4b636488e1a18cd55c10a",
-}
 
 
 class BaselineTests(unittest.TestCase):
@@ -74,8 +66,13 @@ class BaselineTests(unittest.TestCase):
             root = Path(directory)
             write_csv(root, "data/processed/outcome_sequence_data.csv", sparse_outcome_rows())
             write_csv(root, "outputs/lstm_weighted_macro_predictions.csv", predictions)
+            legacy_predictions = root / "outputs/lstm_weighted_macro_predictions.csv"
+            published_eval = root / "outputs/outcome_empirical_eval.csv"
+            published_eval.write_bytes((REPO / "outputs/outcome_empirical_eval.csv").read_bytes())
+            original_files = {path: path.read_bytes() for path in (legacy_predictions, published_eval)}
+
             run_step(root, "outcome_empirical_recommender")
-            result = pd.read_csv(root / "outputs/outcome_empirical_recommendations.csv")
+            result = pd.read_csv(root / "results/outcome_empirical_recommendations.csv")
             self.assertEqual(result["at_bat_number"].tolist(), [13, 14, 15])
             self.assertEqual(result.loc[0, "lstm_top3_pitch_type"], "SL|FF")
             self.assertTrue(result.loc[1:, "lstm_top3_pitch_type"].isna().all())
@@ -88,3 +85,11 @@ class BaselineTests(unittest.TestCase):
                 ["SL/Z1:0.1000(global,n=12)", "SL/Z2:0.1000(global,n=12)",
                  "FF/Z1:0.1000(global,n=12)", "FF/Z2:0.1000(global,n=12)"],
             )
+
+            # A newly generated file takes priority over the old location.
+            write_csv(root, "results/lstm_weighted_macro_predictions.csv", predictions[::-1])
+            run_step(root, "outcome_empirical_recommender")
+            result = pd.read_csv(root / "results/outcome_empirical_recommendations.csv")
+            self.assertEqual(result.loc[0, "lstm_top3_pitch_type"], "FF|SL")
+            self.assertEqual(result.loc[0, "recommended_pitch_type"], "FF")
+            self.assertEqual({path: path.read_bytes() for path in original_files}, original_files)

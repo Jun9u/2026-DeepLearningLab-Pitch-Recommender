@@ -12,17 +12,29 @@ import pandas as pd
 
 REPO = Path(__file__).resolve().parents[1]
 PORT = re.compile(r"Uvicorn running on http://127\.0\.0\.1:(\d+)")
+PUBLIC_RESULTS = {
+    "baseline_results.csv": "62468d69c347170fa4d8efbbbfd83d7ece1ccffc7650e5cf1a40c64096a36449",
+    "lstm_weighted_macro_result.csv": "f29509374171fd672860d27bec4a561ba4abffc51431ba04e58357264055dc82",
+    "outcome_empirical_eval.csv": "3d5b0267800bc56034d2f657b0e56a1220e8accd2bfb708d18e40a684215f314",
+    "outcome_recommendation_sample.csv": "c6931fd84cb23c2b17f4c5db746245b7df41a69260dc85a96dac4abf3ac8759a",
+    "transformer_weighted_macro_result.csv": "f1a7c056aa3f34bb4cb18d3c401632a70b62d14523f4b636488e1a18cd55c10a",
+}
 
 
-def pipeline_env(root):
-    return dict(os.environ, PYTHONDONTWRITEBYTECODE="1", CUDA_VISIBLE_DEVICES="",
-                OMP_NUM_THREADS="2", MKL_NUM_THREADS="2", OPENBLAS_NUM_THREADS="2",
-                PYBASEBALL_CACHE=str(root / "pybaseball-cache"), PYTHONIOENCODING="utf-8")
+def pipeline_env(root, *, run_directory=None):
+    env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1", CUDA_VISIBLE_DEVICES="",
+               OMP_NUM_THREADS="2", MKL_NUM_THREADS="2", OPENBLAS_NUM_THREADS="2",
+               PYBASEBALL_CACHE=str(root / "pybaseball-cache"), PYTHONIOENCODING="utf-8")
+    if run_directory is None:
+        env.pop("PITCH_RUN_DIR", None)
+    else:
+        env["PITCH_RUN_DIR"] = str(run_directory)
+    return env
 
 
-def command(root, *args):
+def command(root, *args, run_directory=None):
     completed = subprocess.run(
-        [sys.executable, *args], cwd=root, env=pipeline_env(root),
+        [sys.executable, *args], cwd=root, env=pipeline_env(root, run_directory=run_directory),
         capture_output=True, encoding="utf-8", timeout=120,
     )
     if completed.returncode:
@@ -30,12 +42,12 @@ def command(root, *args):
     return completed.stdout
 
 
-def run_step(root, module):
-    return command(root, str(REPO / "src" / f"{module}.py"))
+def run_step(root, module, *, run_directory=None):
+    return command(root, str(REPO / "src" / f"{module}.py"), run_directory=run_directory)
 
 
 def stage_web(root):
-    # The original app resolves artifact and UI paths relative to its own source.
+    # Stage the checkout so tests can also check the app's default artifact location.
     for directory in ("src", "web"):
         shutil.copytree(REPO / directory, root / directory, ignore=shutil.ignore_patterns("__pycache__"))
 
@@ -45,11 +57,12 @@ def uvicorn_args():
 
 
 @contextmanager
-def api_server(root):
+def api_server(root, *, run_directory=None):
     log_path = root / "server.log"
     with log_path.open("w", encoding="utf-8") as log:
         process = subprocess.Popen(
-            uvicorn_args(), cwd=root, env=pipeline_env(root), stdout=log, stderr=subprocess.STDOUT,
+            uvicorn_args(), cwd=root, env=pipeline_env(root, run_directory=run_directory),
+            stdout=log, stderr=subprocess.STDOUT,
         )
         try:
             deadline = time.monotonic() + 45

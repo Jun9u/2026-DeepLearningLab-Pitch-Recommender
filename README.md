@@ -152,9 +152,17 @@ python -m pip install -r requirements.txt
 
 가상환경을 사용한다면 운영체제에 맞게 활성화한 후 설치·실행하세요.
 
+### 실험 경로 선택
+
+`PITCH_RUN_DIR`에 실행 경로를 지정하면 수집, 학습, 평가와 웹 서버가 그 아래의 `data/`, `models/`, `results/`를 함께 사용합니다. 아래 예시는 저장소 루트에서 실행하며, 같은 실험의 명령과 서버에 동일한 값을 사용합니다. 경로를 생략하면 스크립트는 현재 작업 디렉터리, 웹 서버는 저장소 루트에서 데이터 또는 모델 파일을 찾습니다.
+
+새 실험 결과는 `results/`에 저장됩니다. `outputs/`는 공개 실험 요약을 보관합니다. 오프라인 랭커는 `results/lstm_weighted_macro_predictions.csv`를 우선 읽고, 파일이 없으면 같은 실행 경로의 기존 `outputs/lstm_weighted_macro_predictions.csv`를 읽습니다.
+
 ### 처음부터 재현하는 경우
 
 ```bash
+export PITCH_RUN_DIR="$PWD/runs/statcast"
+
 # 1. 데이터 수집 및 확인
 python -u src/download_statcast.py
 python -u src/check_csv.py
@@ -175,13 +183,14 @@ python -u src/export_serving_artifacts.py
 
 - `train_transformer.py`는 **비교 실험용**이므로 LSTM 기반 웹 데모 구동에 필수는 아닙니다.
 - `outcome_empirical_recommender.py`는 평가 결과 및 추천 결과를 생성합니다. **웹 서빙 파일 생성에는 `make_outcome_sequence.py`, `train_lstm.py` 실행 결과와 `export_serving_artifacts.py`가 필수**입니다.
-- 다운로드 재시도, 패키지 설치 및 전체 실험 실행에 대한 자동화된 통합 테스트는 제공되지 않습니다.
+- 자동 통합 테스트는 합성 Statcast 응답으로 실행 경로, 학습, 서빙 파일 생성과 API 응답을 확인합니다. [테스트 실행 방법](tests/README.md)
 
 ### 웹 서버 실행
 
-`models/lstm_serving_artifact.pt`와 `models/outcome_ranker_artifact.pkl`이 **로컬에 생성된 후** 다음 명령을 실행합니다.
+선택한 실행 경로의 `models/`에 `lstm_serving_artifact.pt`와 `outcome_ranker_artifact.pkl`이 생성되면 서버를 실행합니다. 새 터미널에서 실행할 때는 수집·학습에 사용한 값을 다시 지정하세요.
 
 ```bash
+export PITCH_RUN_DIR="$PWD/runs/statcast"
 uvicorn web.backend.app:app --reload --host 127.0.0.1 --port 8000
 ```
 
@@ -225,7 +234,7 @@ uvicorn web.backend.app:app --reload --host 127.0.0.1 --port 8000
     └── frontend/index.html
 ```
 
-**실행 과정에서 로컬에 생성되는 주요 파일(저장소에 미포함)**
+**실행 경로 기준으로 로컬에 생성되는 주요 파일**
 
 | 경로 | 용도 |
 | --- | --- |
@@ -233,8 +242,8 @@ uvicorn web.backend.app:app --reload --host 127.0.0.1 --port 8000
 | `models/lstm_weighted_macro_best.pt` | 학습된 LSTM 체크포인트 |
 | `models/lstm_serving_artifact.pt` | 웹 서빙용 LSTM artifact |
 | `models/outcome_ranker_artifact.pkl` | 웹 서빙용 경험적 통계 |
-| `outputs/lstm_weighted_macro_predictions.csv` | 테스트 구간 LSTM 예측 결과 |
-| `outputs/outcome_empirical_recommendations.csv` | 테스트 구간 추천 상세 결과 |
+| `results/lstm_weighted_macro_predictions.csv` | 테스트 구간 LSTM 예측 결과 |
+| `results/outcome_empirical_recommendations.csv` | 테스트 구간 추천 상세 결과 |
 
 [추천 결과 샘플 CSV](outputs/outcome_recommendation_sample.csv)는 저장소에 포함되어 있습니다.  
 [최종 보고서 PDF](docs/fianl_report.pdf) · [최종 발표 자료 PDF](docs/final_presentation.pdf)
@@ -246,7 +255,7 @@ uvicorn web.backend.app:app --reload --host 127.0.0.1 --port 8000
 3. **위치의 의미:** Statcast zone은 투구가 도착한 위치이며, 포수가 의도한 목표 위치와 다를 수 있습니다.
 4. **상황 정보의 제약:** 점수 차, 투구 수, 피로도, 타자 개인별 약점 등은 현재 서빙 추천 규칙에 충분히 반영되지 않았습니다.
 5. **평가 일치성:** 구종 예측용 데이터와 경험적 랭킹용 데이터는 필터링이 달라 동일한 테스트 표본이라고 단정할 수 없습니다.
-6. **실행 재현성:** 원본 데이터 및 학습 모델이 제외되어 있어 clone 후 즉시 웹 데모를 띄울 수 없고, 자동 테스트·배포 파이프라인도 없습니다.
+6. **실행 재현성:** 웹 데모를 실행하려면 서빙 파일이 필요합니다. 자동 테스트는 합성 데이터에서 동작을 확인하며, 공개 성능 수치 재현에는 해당 Statcast 데이터가 필요합니다.
 
 ## 9. 향후 정비
 

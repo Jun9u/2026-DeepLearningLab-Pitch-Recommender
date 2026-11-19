@@ -1,8 +1,13 @@
-from pathlib import Path
 import pandas as pd
 
-INPUT_PATH = Path("data/processed/clean_pitch_data.csv")
-OUT_PATH = Path("data/processed/sequence_data.csv")
+if __package__:
+    from .run_paths import run_directory
+else:
+    from run_paths import run_directory
+
+RUN_DIR = run_directory()
+INPUT_PATH = RUN_DIR / "data/processed/clean_pitch_data.csv"
+OUT_PATH = RUN_DIR / "data/processed/sequence_data.csv"
 
 N = 5
 PAD_TOKEN = "PAD"

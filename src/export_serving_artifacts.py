@@ -1,22 +1,27 @@
-from pathlib import Path
 import pickle
 
 import numpy as np
 import pandas as pd
 import torch
 
+if __package__:
+    from .run_paths import run_directory
+else:
+    from run_paths import run_directory
+
 
 # =========================
 # 경로 설정
 # =========================
 
-LSTM_CHECKPOINT_PATH = Path("models/lstm_weighted_macro_best.pt")
-LSTM_SERVING_PATH = Path("models/lstm_serving_artifact.pt")
+RUN_DIR = run_directory()
+LSTM_CHECKPOINT_PATH = RUN_DIR / "models/lstm_weighted_macro_best.pt"
+LSTM_SERVING_PATH = RUN_DIR / "models/lstm_serving_artifact.pt"
 
-OUTCOME_PATH = Path("data/processed/outcome_sequence_data.csv")
-OUTCOME_ARTIFACT_PATH = Path("models/outcome_ranker_artifact.pkl")
+OUTCOME_PATH = RUN_DIR / "data/processed/outcome_sequence_data.csv"
+OUTCOME_ARTIFACT_PATH = RUN_DIR / "models/outcome_ranker_artifact.pkl"
 
-SEQUENCE_PATH = Path("data/processed/sequence_data.csv")
+SEQUENCE_PATH = RUN_DIR / "data/processed/sequence_data.csv"
 
 NUMERIC_COLS = [
     "balls",
