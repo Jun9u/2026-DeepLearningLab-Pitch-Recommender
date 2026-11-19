@@ -142,6 +142,17 @@ with patch("pybaseball.statcast", return_value=pd.read_csv("fixture.csv")):
             "selected_minus_best": 0, "is_selected_better_or_equal": True,
         })
 
+        higher = next((item for item in ranked if item["pred_delta_run_exp"] > scores[0]), None)
+        self.assertIsNotNone(higher, "The fixture must contain a recommendation with a higher score.")
+        status, comparison = request(base, "/compare", {
+            **REQUEST, "action_pitch_type": higher["pitch_type"], "action_zone": higher["zone"],
+        })
+        self.assertEqual(status, 200)
+        difference = comparison["comparison"]["selected_minus_best"]
+        self.assertGreater(difference, 0)
+        self.assertAlmostEqual(difference, higher["pred_delta_run_exp"] - scores[0])
+        self.assertFalse(comparison["comparison"]["is_selected_better_or_equal"])
+
         _, manual = request(base, "/recommend", {**REQUEST, "candidate_pitch_types": [" ch ", "X", "CH"]})
         self.assertEqual(manual["candidate_pitches"], ["CH"])
         _, fallback = request(base, "/recommend", {**REQUEST, "candidate_pitch_types": ["X"], "prev_zones": []})
