@@ -36,3 +36,10 @@ __pycache__/
 .DS_Store
 Thumbs.db
 .vscode/
+
+# Test and coverage reports
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.pytest_cache/
