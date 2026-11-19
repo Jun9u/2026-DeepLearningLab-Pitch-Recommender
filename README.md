@@ -175,7 +175,7 @@ python -u src/export_serving_artifacts.py
 
 - `train_transformer.py`는 **비교 실험용**이므로 LSTM 기반 웹 데모 구동에 필수는 아닙니다.
 - `outcome_empirical_recommender.py`는 평가 결과 및 추천 결과를 생성합니다. **웹 서빙 파일 생성에는 `make_outcome_sequence.py`, `train_lstm.py` 실행 결과와 `export_serving_artifacts.py`가 필수**입니다.
-- 다운로드 재시도, 패키지 설치 및 전체 실험 실행에 대한 자동화된 통합 테스트는 제공되지 않습니다.
+- 자동 통합 테스트는 합성 Statcast 응답으로 실행 경로, 학습, 서빙 파일 생성과 API 응답을 확인합니다. [테스트 실행 방법](tests/README.md)
 
 ### 웹 서버 실행
 
@@ -199,7 +199,7 @@ uvicorn web.backend.app:app --reload --host 127.0.0.1 --port 8000
 ├── requirements.txt
 ├── .gitignore
 ├── docs/
-│   ├── fianl_report.pdf            # 기존 파일명 유지
+│   ├── final_report.pdf
 │   ├── final_presentation.pdf
 │   └── MAINTENANCE.md
 ├── outputs/
@@ -237,7 +237,7 @@ uvicorn web.backend.app:app --reload --host 127.0.0.1 --port 8000
 | `outputs/outcome_empirical_recommendations.csv` | 테스트 구간 추천 상세 결과 |
 
 [추천 결과 샘플 CSV](outputs/outcome_recommendation_sample.csv)는 저장소에 포함되어 있습니다.  
-[최종 보고서 PDF](docs/fianl_report.pdf) · [최종 발표 자료 PDF](docs/final_presentation.pdf)
+[최종 보고서 PDF](docs/final_report.pdf) · [최종 발표 자료 PDF](docs/final_presentation.pdf)
 
 ## 8. 한계와 해석 시 주의사항
 
@@ -246,7 +246,7 @@ uvicorn web.backend.app:app --reload --host 127.0.0.1 --port 8000
 3. **위치의 의미:** Statcast zone은 투구가 도착한 위치이며, 포수가 의도한 목표 위치와 다를 수 있습니다.
 4. **상황 정보의 제약:** 점수 차, 투구 수, 피로도, 타자 개인별 약점 등은 현재 서빙 추천 규칙에 충분히 반영되지 않았습니다.
 5. **평가 일치성:** 구종 예측용 데이터와 경험적 랭킹용 데이터는 필터링이 달라 동일한 테스트 표본이라고 단정할 수 없습니다.
-6. **실행 재현성:** 원본 데이터 및 학습 모델이 제외되어 있어 clone 후 즉시 웹 데모를 띄울 수 없고, 자동 테스트·배포 파이프라인도 없습니다.
+6. **실행 재현성:** 웹 데모를 실행하려면 서빙 파일이 필요합니다. 자동 테스트는 합성 데이터에서 동작을 확인하며, 공개 성능 수치 재현에는 해당 Statcast 데이터가 필요합니다.
 
 ## 9. 향후 정비
 
