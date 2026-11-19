@@ -1,44 +1,33 @@
-# data
+# Local data and generated artifacts
 data/raw/
 data/processed/
+*.csv
 *.parquet
 *.pkl
 
-# raw csv 기본 무시
-*.csv
-
-# model files
+# Model checkpoints and serving artifacts
 models/
 *.pt
 *.pth
 *.ckpt
-*.pkl
 
-# outputs 기본 무시
+# Keep only selected, lightweight result summaries in Git
 outputs/*
-
-# 단, 제출/리뷰용 요약 결과는 허용
 !outputs/baseline_results.csv
 !outputs/lstm_weighted_macro_result.csv
+!outputs/transformer_weighted_macro_result.csv
 !outputs/outcome_empirical_eval.csv
 !outputs/outcome_recommendation_sample.csv
-!outputs/transformer_weighted_macro_result.csv
 
-# python
-.venv/
-__pycache__/
-*.pyc
-
-# notebook
-.ipynb_checkpoints/
-
-# OS/editor
-.DS_Store
-Thumbs.db
-.vscode/
-# Virtual environments
+# Python caches and virtual environments
 .venv/
 .venv_check/
 venv/
 __pycache__/
 *.pyc
+.ipynb_checkpoints/
+
+# OS and editors
+.DS_Store
+Thumbs.db
+.vscode/
