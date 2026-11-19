@@ -1,0 +1,27 @@
+name: Research
+description: Investigate a question before implementation
+title: "[Research] "
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Research question
+      description: What decision will this research support?
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and sources
+      description: Data, papers, references, and constraints
+  - type: textarea
+    id: deliverable
+    attributes:
+      label: Expected deliverable
+      placeholder: Decision, comparison, feasibility assessment, or documented findings
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
