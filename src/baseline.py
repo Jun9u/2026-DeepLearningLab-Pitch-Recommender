@@ -1,9 +1,14 @@
-from pathlib import Path
 import pandas as pd
 from sklearn.metrics import accuracy_score, f1_score
 
-DATA_PATH = Path("data/processed/sequence_data.csv")
-OUTPUT_PATH = Path("outputs/baseline_results.csv")
+if __package__:
+    from .run_paths import run_directory
+else:
+    from run_paths import run_directory
+
+RUN_DIR = run_directory()
+DATA_PATH = RUN_DIR / "data/processed/sequence_data.csv"
+OUTPUT_PATH = RUN_DIR / "results/baseline_results.csv"
 
 TARGET_COL = "target_pitch_type"
 

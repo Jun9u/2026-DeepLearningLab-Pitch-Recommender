@@ -1,8 +1,13 @@
-from pathlib import Path
 import pandas as pd
 
-RAW_PATH = Path("data/raw/savant_data.csv")
-OUT_PATH = Path("data/processed/clean_pitch_data.csv")
+if __package__:
+    from .run_paths import run_directory
+else:
+    from run_paths import run_directory
+
+RUN_DIR = run_directory()
+RAW_PATH = RUN_DIR / "data/raw/savant_data.csv"
+OUT_PATH = RUN_DIR / "data/processed/clean_pitch_data.csv"
 
 USE_COLS = [
     "pitch_type",

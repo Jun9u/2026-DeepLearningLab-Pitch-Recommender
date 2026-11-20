@@ -158,9 +158,17 @@ python -m pip install -r requirements.txt
 
 가상환경을 사용한다면 운영체제에 맞게 활성화한 후 설치·실행하세요.
 
+### 실험 경로 선택
+
+`PITCH_RUN_DIR`에 실행 경로를 지정하면 수집, 학습, 평가와 웹 서버가 그 아래의 `data/`, `models/`, `results/`를 함께 사용합니다. 아래 예시는 저장소 루트에서 실행하며, 같은 실험의 명령과 서버에 동일한 값을 사용합니다. 경로를 생략하면 스크립트는 현재 작업 디렉터리, 웹 서버는 저장소 루트에서 데이터 또는 모델 파일을 찾습니다.
+
+새 실험 결과는 `results/`에 저장됩니다. `outputs/`는 공개 실험 요약을 보관합니다. 오프라인 랭커는 `results/lstm_weighted_macro_predictions.csv`를 우선 읽고, 파일이 없으면 같은 실행 경로의 기존 `outputs/lstm_weighted_macro_predictions.csv`를 읽습니다.
+
 ### 처음부터 재현하는 경우
 
 ```bash
+export PITCH_RUN_DIR="$PWD/runs/statcast"
+
 # 1. 데이터 수집 및 확인
 python -u src/download_statcast.py
 python -u src/check_csv.py
@@ -185,9 +193,10 @@ python -u src/export_serving_artifacts.py
 
 ### 웹 서버 실행
 
-`models/lstm_serving_artifact.pt`와 `models/outcome_ranker_artifact.pkl`이 **로컬에 생성된 후** 다음 명령을 실행합니다.
+선택한 실행 경로의 `models/`에 `lstm_serving_artifact.pt`와 `outcome_ranker_artifact.pkl`이 생성되면 서버를 실행합니다. 새 터미널에서 실행할 때는 수집·학습에 사용한 값을 다시 지정하세요.
 
 ```bash
+export PITCH_RUN_DIR="$PWD/runs/statcast"
 uvicorn web.backend.app:app --reload --host 127.0.0.1 --port 8000
 ```
 
@@ -231,7 +240,7 @@ uvicorn web.backend.app:app --reload --host 127.0.0.1 --port 8000
     └── frontend/index.html
 ```
 
-**실행 과정에서 로컬에 생성되는 주요 파일(저장소에 미포함)**
+**실행 경로 기준으로 로컬에 생성되는 주요 파일**
 
 | 경로 | 용도 |
 | --- | --- |
@@ -239,8 +248,8 @@ uvicorn web.backend.app:app --reload --host 127.0.0.1 --port 8000
 | `models/lstm_weighted_macro_best.pt` | 학습된 LSTM 체크포인트 |
 | `models/lstm_serving_artifact.pt` | 웹 서빙용 LSTM artifact |
 | `models/outcome_ranker_artifact.pkl` | 웹 서빙용 경험적 통계 |
-| `outputs/lstm_weighted_macro_predictions.csv` | 테스트 구간 LSTM 예측 결과 |
-| `outputs/outcome_empirical_recommendations.csv` | 테스트 구간 추천 상세 결과 |
+| `results/lstm_weighted_macro_predictions.csv` | 테스트 구간 LSTM 예측 결과 |
+| `results/outcome_empirical_recommendations.csv` | 테스트 구간 추천 상세 결과 |
 
 [추천 결과 샘플 CSV](outputs/outcome_recommendation_sample.csv)는 저장소에 포함되어 있습니다.  
 [최종 보고서 PDF](docs/final_report.pdf) · [최종 발표 자료 PDF](docs/final_presentation.pdf)

@@ -1,7 +1,12 @@
-from pathlib import Path
 import pandas as pd
 
-DATA_PATH = Path("data/raw/savant_data.csv")
+if __package__:
+    from .run_paths import run_directory
+else:
+    from run_paths import run_directory
+
+RUN_DIR = run_directory()
+DATA_PATH = RUN_DIR / "data/raw/savant_data.csv"
 
 required_cols = [
     "pitch_type",

@@ -1,4 +1,3 @@
-from pathlib import Path
 import random
 import time
 import platform
@@ -13,6 +12,11 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import accuracy_score, f1_score, classification_report
 from sklearn.preprocessing import StandardScaler
 
+if __package__:
+    from .run_paths import run_directory
+else:
+    from run_paths import run_directory
+
 
 # =========================
 # 설정
@@ -20,13 +24,14 @@ from sklearn.preprocessing import StandardScaler
 
 EXPERIMENT_NAME = "lstm_weighted_macro"
 
-DATA_PATH = Path("data/processed/sequence_data.csv")
+RUN_DIR = run_directory()
+DATA_PATH = RUN_DIR / "data/processed/sequence_data.csv"
 
-MODEL_PATH = Path(f"models/{EXPERIMENT_NAME}_best.pt")
-RESULT_PATH = Path(f"outputs/{EXPERIMENT_NAME}_result.csv")
-PRED_PATH = Path(f"outputs/{EXPERIMENT_NAME}_predictions.csv")
-HISTORY_PATH = Path(f"outputs/{EXPERIMENT_NAME}_training_log.csv")
-REPORT_PATH = Path(f"outputs/{EXPERIMENT_NAME}_classification_report.csv")
+MODEL_PATH = RUN_DIR / f"models/{EXPERIMENT_NAME}_best.pt"
+RESULT_PATH = RUN_DIR / f"results/{EXPERIMENT_NAME}_result.csv"
+PRED_PATH = RUN_DIR / f"results/{EXPERIMENT_NAME}_predictions.csv"
+HISTORY_PATH = RUN_DIR / f"results/{EXPERIMENT_NAME}_training_log.csv"
+REPORT_PATH = RUN_DIR / f"results/{EXPERIMENT_NAME}_classification_report.csv"
 
 TARGET_COL = "target_pitch_type"
 
