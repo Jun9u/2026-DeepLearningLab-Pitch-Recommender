@@ -109,7 +109,7 @@ with patch("pybaseball.statcast", return_value=pd.read_csv("fixture.csv")):
             recommendations = pd.read_csv(run_root / "results/outcome_empirical_recommendations.csv")
             self.assertTrue(recommendations["lstm_top3_pitch_type"].notna().all())
 
-            for directory_name in ("data", "results", "models"):
+            for directory_name in ("data", "results", "models", "outputs"):
                 self.assertFalse((root / directory_name).exists(), directory_name)
             stage_web(root)
             with api_server(root, run_directory=launch_dir) as base:
