@@ -3,8 +3,10 @@ import numpy as np
 
 if __package__:
     from .run_paths import run_directory
+    from .sequence_helpers import add_runner_flags, iter_pitch_histories, left_pad as left_pad
 else:
     from run_paths import run_directory
+    from sequence_helpers import add_runner_flags, iter_pitch_histories, left_pad as left_pad
 
 
 # =========================
@@ -14,10 +16,6 @@ else:
 RUN_DIR = run_directory()
 INPUT_PATH = RUN_DIR / "data/raw/savant_data_with_outcome.csv"
 OUT_PATH = RUN_DIR / "data/processed/outcome_sequence_data.csv"
-
-N = 5
-PAD_TOKEN = "PAD"
-ZONE_PAD = "ZPAD"
 
 MIN_PITCH_COUNT = 500
 GROUP_RARE_PITCHES = True
@@ -62,12 +60,6 @@ def zone_to_token(x):
         return "ZUNK"
 
 
-def left_pad(values, n, pad_token):
-    values = list(values)[-n:]
-    pad_len = n - len(values)
-    return [pad_token] * pad_len + values
-
-
 def main():
     if not INPUT_PATH.exists():
         raise FileNotFoundError(f"파일이 없습니다: {INPUT_PATH}")
@@ -91,9 +83,7 @@ def main():
     df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
 
     # 주자 상황 변환
-    df["runner_1b"] = df["on_1b"].notna().astype(int)
-    df["runner_2b"] = df["on_2b"].notna().astype(int)
-    df["runner_3b"] = df["on_3b"].notna().astype(int)
+    add_runner_flags(df)
 
     # zone 토큰화
     df["zone_token"] = df["zone"].apply(zone_to_token)
@@ -125,81 +115,52 @@ def main():
     print("\n===== 희귀 구종 처리 후 pitch_type 분포 =====")
     print(df["pitch_type_mapped"].value_counts())
 
-    df = df.sort_values(
-        ["game_date", "game_pk", "at_bat_number", "pitch_number"]
-    ).reset_index(drop=True)
-
     samples = []
+    for current, history in iter_pitch_histories(df, "pitch_type_mapped"):
+        sample = {
+            "game_date": current["game_date"],
+            "game_pk": current["game_pk"],
+            "at_bat_number": current["at_bat_number"],
+            "pitch_number": current["pitch_number"],
 
-    for _, group in df.groupby(["game_pk", "at_bat_number"], sort=False):
-        group = group.sort_values("pitch_number").reset_index(drop=True)
+            # state: 이전 흐름
+            **history,
 
-        # 첫 투구는 이전 투구가 없어서 제외
-        for i in range(1, len(group)):
-            prev = group.iloc[max(0, i - N):i]
-            current = group.iloc[i]
+            # state: 현재 경기 상황
+            "balls": current["balls"],
+            "strikes": current["strikes"],
+            "outs_when_up": current["outs_when_up"],
+            "inning": current["inning"],
+            "runner_1b": current["runner_1b"],
+            "runner_2b": current["runner_2b"],
+            "runner_3b": current["runner_3b"],
 
-            prev_pitch_types = left_pad(
-                prev["pitch_type_mapped"].tolist(),
-                N,
-                PAD_TOKEN,
-            )
+            "bat_score": current.get("bat_score", np.nan),
+            "fld_score": current.get("fld_score", np.nan),
+            "bat_score_diff": current.get("bat_score_diff", np.nan),
 
-            prev_zones = left_pad(
-                prev["zone_token"].tolist(),
-                N,
-                ZONE_PAD,
-            )
+            "pitcher": current["pitcher"],
+            "batter": current["batter"],
+            "stand": current["stand"],
+            "p_throws": current["p_throws"],
 
-            sample = {
-                "game_date": current["game_date"],
-                "game_pk": current["game_pk"],
-                "at_bat_number": current["at_bat_number"],
-                "pitch_number": current["pitch_number"],
+            # action: 실제 선택된 구종 + 실제 도착 zone
+            "action_pitch_type": current["pitch_type_mapped"],
+            "action_pitch_type_original": current["pitch_type_original"],
+            "action_zone": current["zone_token"],
+            "action_zone_raw": current["zone"],
+            "plate_x": current["plate_x"],
+            "plate_z": current["plate_z"],
 
-                # state: 이전 흐름
-                "seq_pitch_type": "|".join(prev_pitch_types),
-                "seq_zone": "|".join(prev_zones),
-                "seq_len": len(prev),
+            # target
+            "delta_run_exp": current["delta_run_exp"],
 
-                "prev_pitch_type": prev_pitch_types[-1],
-                "prev_zone": prev_zones[-1],
+            # 분석용
+            "description": current["description"],
+            "events": current["events"],
+        }
 
-                # state: 현재 경기 상황
-                "balls": current["balls"],
-                "strikes": current["strikes"],
-                "outs_when_up": current["outs_when_up"],
-                "inning": current["inning"],
-                "runner_1b": current["runner_1b"],
-                "runner_2b": current["runner_2b"],
-                "runner_3b": current["runner_3b"],
-
-                "bat_score": current.get("bat_score", np.nan),
-                "fld_score": current.get("fld_score", np.nan),
-                "bat_score_diff": current.get("bat_score_diff", np.nan),
-
-                "pitcher": current["pitcher"],
-                "batter": current["batter"],
-                "stand": current["stand"],
-                "p_throws": current["p_throws"],
-
-                # action: 실제 선택된 구종 + 실제 도착 zone
-                "action_pitch_type": current["pitch_type_mapped"],
-                "action_pitch_type_original": current["pitch_type_original"],
-                "action_zone": current["zone_token"],
-                "action_zone_raw": current["zone"],
-                "plate_x": current["plate_x"],
-                "plate_z": current["plate_z"],
-
-                # target
-                "delta_run_exp": current["delta_run_exp"],
-
-                # 분석용
-                "description": current["description"],
-                "events": current["events"],
-            }
-
-            samples.append(sample)
+        samples.append(sample)
 
     seq_df = pd.DataFrame(samples)
 

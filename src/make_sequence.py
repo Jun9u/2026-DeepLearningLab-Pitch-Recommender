@@ -2,16 +2,14 @@ import pandas as pd
 
 if __package__:
     from .run_paths import run_directory
+    from .sequence_helpers import iter_pitch_histories, left_pad as left_pad, sort_pitches
 else:
     from run_paths import run_directory
+    from sequence_helpers import iter_pitch_histories, left_pad as left_pad, sort_pitches
 
 RUN_DIR = run_directory()
 INPUT_PATH = RUN_DIR / "data/processed/clean_pitch_data.csv"
 OUT_PATH = RUN_DIR / "data/processed/sequence_data.csv"
-
-N = 5
-PAD_TOKEN = "PAD"
-ZONE_PAD = "ZPAD"
 
 # 너무 적은 구종은 OTHER로 묶음
 # 보고서에 "희귀 구종은 OTHER로 통합"이라고 쓰면 됨
@@ -29,13 +27,6 @@ def zone_to_token(x):
         return f"Z{int(float(x))}"
     except ValueError:
         return f"Z{x}"
-
-
-def left_pad(values, n, pad_token):
-    """길이가 n보다 짧으면 왼쪽에 PAD 추가"""
-    values = list(values)[-n:]
-    pad_len = n - len(values)
-    return [pad_token] * pad_len + values
 
 
 def map_rare_token_sequence(seq_text, rare_set):
@@ -79,64 +70,34 @@ def main():
     df["pitch_type"] = df["pitch_type"].astype(str)
     df["zone_token"] = df["zone"].apply(zone_to_token)
 
-    df = df.sort_values(
-        ["game_date", "game_pk", "at_bat_number", "pitch_number"]
-    ).reset_index(drop=True)
-
     samples = []
+    for current, history in iter_pitch_histories(df, "pitch_type"):
+        sample = {
+            "game_date": current["game_date"],
+            "game_pk": current["game_pk"],
+            "at_bat_number": current["at_bat_number"],
+            "pitch_number": current["pitch_number"],
 
-    for _, group in df.groupby(["game_pk", "at_bat_number"], sort=False):
-        group = group.sort_values("pitch_number").reset_index(drop=True)
+            **history,
 
-        # 첫 투구는 이전 투구가 없으므로 제외
-        # 두 번째 투구부터는 부족한 부분을 PAD로 채워 사용
-        for i in range(1, len(group)):
-            prev = group.iloc[max(0, i - N):i]
-            current = group.iloc[i]
+            "balls": current["balls"],
+            "strikes": current["strikes"],
+            "outs_when_up": current["outs_when_up"],
+            "inning": current["inning"],
 
-            prev_pitch_types = left_pad(
-                prev["pitch_type"].tolist(),
-                N,
-                PAD_TOKEN
-            )
+            "runner_1b": current["runner_1b"],
+            "runner_2b": current["runner_2b"],
+            "runner_3b": current["runner_3b"],
 
-            prev_zones = left_pad(
-                prev["zone_token"].tolist(),
-                N,
-                ZONE_PAD
-            )
+            "pitcher": current["pitcher"],
+            "batter": current["batter"],
+            "stand": current["stand"],
+            "p_throws": current["p_throws"],
 
-            sample = {
-                "game_date": current["game_date"],
-                "game_pk": current["game_pk"],
-                "at_bat_number": current["at_bat_number"],
-                "pitch_number": current["pitch_number"],
+            "target_pitch_type": current["pitch_type"],
+        }
 
-                "seq_pitch_type": "|".join(prev_pitch_types),
-                "seq_zone": "|".join(prev_zones),
-                "seq_len": len(prev),
-
-                "prev_pitch_type": prev_pitch_types[-1],
-                "prev_zone": prev_zones[-1],
-
-                "balls": current["balls"],
-                "strikes": current["strikes"],
-                "outs_when_up": current["outs_when_up"],
-                "inning": current["inning"],
-
-                "runner_1b": current["runner_1b"],
-                "runner_2b": current["runner_2b"],
-                "runner_3b": current["runner_3b"],
-
-                "pitcher": current["pitcher"],
-                "batter": current["batter"],
-                "stand": current["stand"],
-                "p_throws": current["p_throws"],
-
-                "target_pitch_type": current["pitch_type"],
-            }
-
-            samples.append(sample)
+        samples.append(sample)
 
     # samples 리스트를 DataFrame으로 변환
     seq_df = pd.DataFrame(samples)
@@ -145,9 +106,7 @@ def main():
         raise ValueError("생성된 시퀀스 데이터가 없습니다. 입력 데이터와 그룹 구성 로직을 확인하세요.")
 
     # 날짜/경기/타석/투구 순서 정렬
-    seq_df = seq_df.sort_values(
-        ["game_date", "game_pk", "at_bat_number", "pitch_number"]
-    ).reset_index(drop=True)
+    seq_df = sort_pitches(seq_df)
 
     print("===== 희귀 구종 처리 전 target 분포 =====")
     print(seq_df["target_pitch_type"].value_counts().head(30))

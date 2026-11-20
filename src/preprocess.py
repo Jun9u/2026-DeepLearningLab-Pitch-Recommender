@@ -2,8 +2,10 @@ import pandas as pd
 
 if __package__:
     from .run_paths import run_directory
+    from .sequence_helpers import add_runner_flags, sort_pitches
 else:
     from run_paths import run_directory
+    from sequence_helpers import add_runner_flags, sort_pitches
 
 RUN_DIR = run_directory()
 RAW_PATH = RUN_DIR / "data/raw/savant_data.csv"
@@ -43,17 +45,13 @@ def main():
     df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
 
     # 주자 상황: 비어 있으면 주자 없음, 값이 있으면 주자 있음
-    df["runner_1b"] = df["on_1b"].notna().astype(int)
-    df["runner_2b"] = df["on_2b"].notna().astype(int)
-    df["runner_3b"] = df["on_3b"].notna().astype(int)
+    add_runner_flags(df)
 
     # 원래 주자 ID 컬럼 제거
     df = df.drop(columns=["on_1b", "on_2b", "on_3b"])
 
     # 정렬
-    df = df.sort_values(
-        ["game_date", "game_pk", "at_bat_number", "pitch_number"]
-    ).reset_index(drop=True)
+    df = sort_pitches(df)
 
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(OUT_PATH, index=False, encoding="utf-8-sig")
