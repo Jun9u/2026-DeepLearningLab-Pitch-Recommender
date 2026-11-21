@@ -16,7 +16,7 @@ class BaselineTests(unittest.TestCase):
                 data = (REPO / "outputs" / name).read_bytes().replace(b"\r\n", b"\n")
                 self.assertEqual(hashlib.sha256(data).hexdigest(), digest)
 
-    def test_sequence_rare_pitch_boundary_and_labels_absent_from_training(self):
+    def test_sequences_preserve_their_rare_pitch_policies(self):
         # 70% of 1,500 targets is 1,050. SL and FF straddle the cutoff.
         targets = ["SL"] * 499 + ["FF"] * 500 + ["CH"] * 51 + ["KC"] * 450
         rows = [
@@ -27,8 +27,9 @@ class BaselineTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             write_csv(root, "data/raw/savant_data.csv", rows)
-            run_step(root, "preprocess")
-            run_step(root, "make_sequence")
+            write_csv(root, "data/raw/savant_data_with_outcome.csv", rows)
+            for step in ("preprocess", "make_sequence", "make_outcome_sequence"):
+                run_step(root, step)
             result = pd.read_csv(root / "data/processed/sequence_data.csv")
             self.assertEqual(len(result), 1500)
             self.assertEqual(result["at_bat_number"].tolist(), list(range(1, 1501)))
@@ -37,6 +38,12 @@ class BaselineTests(unittest.TestCase):
             self.assertEqual(result["target_pitch_type"].tolist(),
                              ["OTHER"] * 499 + ["FF"] * 500 + ["OTHER"] * 51 + ["KC"] * 450)
             self.assertTrue(result["seq_pitch_type"].eq("PAD|PAD|PAD|PAD|OTHER").all())
+
+            # Outcome mapping counts all filtered pitches, including first pitches.
+            outcome = pd.read_csv(root / "data/processed/outcome_sequence_data.csv")
+            self.assertEqual(outcome["action_pitch_type_original"].tolist(), targets)
+            self.assertEqual(outcome["action_pitch_type"].tolist(), ["SL"] * 499 + ["FF"] * 500 + ["OTHER"] * 501)
+            self.assertTrue(outcome["seq_pitch_type"].eq("PAD|PAD|PAD|PAD|SL").all())
 
     def test_middle_pitch_with_missing_outcome_is_removed_only_from_outcome_history(self):
         rows = [pitch(1, number, "FF", zone=number) for number in range(1, 9)]
