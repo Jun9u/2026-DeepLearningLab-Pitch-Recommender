@@ -3,7 +3,6 @@ import sys
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
 
 
 # ============================================================
@@ -14,6 +13,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.run_paths import run_directory  # noqa: E402
+from web.backend.frontend import add_frontend_routes  # noqa: E402
 from web.backend.schemas import CompareRequest, RecommendRequest  # noqa: E402
 from web.backend.service import PitchRecommendationService  # noqa: E402
 
@@ -49,18 +49,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-@app.get("/")
-def index():
-    if FRONTEND_PATH.exists():
-        return FileResponse(FRONTEND_PATH)
-
-    return HTMLResponse(
-        """
-        <h1>Pitch Recommendation API</h1>
-        <p>Frontend file not found. Use <a href="/docs">/docs</a> to test API.</p>
-        """
-    )
+add_frontend_routes(app, FRONTEND_PATH)
 
 
 @app.get("/health")

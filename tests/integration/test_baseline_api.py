@@ -136,7 +136,19 @@ with patch("pybaseball.statcast", return_value=pd.read_csv("fixture.csv")):
             )
 
     def check_model_api(self, base):
-        self.assertEqual(request(base, "/")[0], 200)
+        status, html = request(base, "/")
+        self.assertEqual(status, 200)
+        for name, content_types in (
+            ("styles.css", {"text/css"}),
+            ("app.js", {"text/javascript", "application/javascript"}),
+        ):
+            with self.subTest(asset=name):
+                self.assertIn(f'"assets/{name}"'.encode(), html)
+                with HTTP.open(f"{base}/assets/{name}", timeout=10) as response:
+                    self.assertEqual(response.status, 200)
+                    self.assertIn(response.headers.get_content_type(), content_types)
+                    self.assertEqual(response.read(), (REPO / "web/frontend/assets" / name).read_bytes())
+        self.assertEqual(request(base, "/assets/missing.js")[0], 404)
         status, health = request(base, "/health")
         self.assertEqual((status, health["status"]), (200, "ok"))
         self.assertEqual(health["num_pitchers_outcome"], 4)
