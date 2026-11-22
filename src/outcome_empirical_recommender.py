@@ -5,8 +5,10 @@ import numpy as np
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 if __package__:
+    from . import empirical_ranker as ranker
     from .run_paths import run_directory
 else:
+    import empirical_ranker as ranker
     from run_paths import run_directory
 
 
@@ -21,16 +23,6 @@ LSTM_PRED_PATH = RUN_DIR / "results/lstm_weighted_macro_predictions.csv"
 EVAL_OUTPUT_PATH = RUN_DIR / "results/outcome_empirical_eval.csv"
 RECOMMEND_OUTPUT_PATH = RUN_DIR / "results/outcome_empirical_recommendations.csv"
 
-TARGET_COL = "delta_run_exp"
-
-ALPHA = 50.0
-
-MIN_COUNT_PITCHER_COUNT_ACTION_ZONE = 5
-MIN_COUNT_PITCHER_ACTION_ZONE = 10
-MIN_COUNT_COUNT_ACTION_ZONE = 20
-MIN_COUNT_ACTION_ZONE = 30
-MIN_COUNT_ACTION = 50
-
 TOP_N_RECOMMENDATIONS = 5
 
 KEY_COLS = [
@@ -43,47 +35,6 @@ KEY_COLS = [
 # =========================
 # 유틸
 # =========================
-
-def zone_sort_key(z):
-    try:
-        return int(str(z).replace("Z", ""))
-    except ValueError:
-        return 999
-
-
-def smoothed_mean(sum_value, count_value, global_mean, alpha=50.0):
-    return (sum_value + alpha * global_mean) / (count_value + alpha)
-
-
-def build_stat_dict(train_df, group_cols):
-    stats = (
-        train_df
-        .groupby(group_cols, dropna=False)[TARGET_COL]
-        .agg(["sum", "count", "mean"])
-        .reset_index()
-    )
-
-    stat_dict = {}
-
-    for _, row in stats.iterrows():
-        key = tuple(row[c] for c in group_cols)
-        stat_dict[key] = {
-            "sum": float(row["sum"]),
-            "count": int(row["count"]),
-            "mean": float(row["mean"]),
-        }
-
-    return stat_dict
-
-
-def get_stat_score(stat, global_mean):
-    return smoothed_mean(
-        stat["sum"],
-        stat["count"],
-        global_mean,
-        ALPHA,
-    )
-
 
 def load_lstm_predictions(test_df):
     prediction_path = LSTM_PRED_PATH
@@ -153,53 +104,24 @@ def main():
     print("Train:", train_df.shape)
     print("Test :", test_df.shape)
 
-    global_mean = train_df[TARGET_COL].mean()
+    global_mean = train_df[ranker.TARGET_COL].mean()
 
     print("\n===== train delta_run_exp =====")
-    print(train_df[TARGET_COL].describe())
+    print(train_df[ranker.TARGET_COL].describe())
     print("global_mean:", global_mean)
 
     # 계층적 통계 생성
-    stats_pitcher_count_action_zone = build_stat_dict(
-        train_df,
-        ["pitcher", "balls", "strikes", "action_pitch_type", "action_zone"],
-    )
-
-    stats_pitcher_action_zone = build_stat_dict(
-        train_df,
-        ["pitcher", "action_pitch_type", "action_zone"],
-    )
-
-    stats_count_action_zone = build_stat_dict(
-        train_df,
-        ["balls", "strikes", "action_pitch_type", "action_zone"],
-    )
-
-    stats_action_zone = build_stat_dict(
-        train_df,
-        ["action_pitch_type", "action_zone"],
-    )
-
-    stats_action = build_stat_dict(
-        train_df,
-        ["action_pitch_type"],
-    )
+    stats = ranker.build_stat_tables(train_df)
 
     print("\n===== 통계 테이블 크기 =====")
-    print("pitcher+count+action+zone:", len(stats_pitcher_count_action_zone))
-    print("pitcher+action+zone      :", len(stats_pitcher_action_zone))
-    print("count+action+zone        :", len(stats_count_action_zone))
-    print("action+zone              :", len(stats_action_zone))
-    print("action                   :", len(stats_action))
+    print("pitcher+count+action+zone:", len(stats["pitcher_count_action_zone"]))
+    print("pitcher+action+zone      :", len(stats["pitcher_action_zone"]))
+    print("count+action+zone        :", len(stats["count_action_zone"]))
+    print("action+zone              :", len(stats["action_zone"]))
+    print("action                   :", len(stats["action"]))
 
     # 후보 zone
-    valid_zones = sorted(
-        [
-            z for z in train_df["action_zone"].dropna().unique().tolist()
-            if str(z).startswith("Z") and z not in ["ZPAD", "ZUNK"]
-        ],
-        key=zone_sort_key,
-    )
+    valid_zones = ranker.candidate_zones(train_df)
 
     print("\n===== 후보 zone =====")
     print(valid_zones)
@@ -217,64 +139,14 @@ def main():
     print("\n===== 전체 top pitches =====")
     print(global_top_pitches)
 
+    train_count = len(train_df)
+
     def predict_delta(row, action_pitch_type, action_zone):
-        """
-        낮을수록 투수에게 유리한 추천 점수.
-        """
-        key1 = (
-            row["pitcher"],
-            row["balls"],
-            row["strikes"],
-            action_pitch_type,
-            action_zone,
+        return ranker.score_action(
+            row["pitcher"], row["balls"], row["strikes"], action_pitch_type, action_zone,
+            stats=stats, thresholds=ranker.DEFAULT_THRESHOLDS, global_mean=global_mean,
+            alpha=ranker.DEFAULT_ALPHA, global_count=train_count,
         )
-
-        stat = stats_pitcher_count_action_zone.get(key1)
-
-        if stat is not None and stat["count"] >= MIN_COUNT_PITCHER_COUNT_ACTION_ZONE:
-            return get_stat_score(stat, global_mean), "pitcher+count+action+zone", stat["count"]
-
-        key2 = (
-            row["pitcher"],
-            action_pitch_type,
-            action_zone,
-        )
-
-        stat = stats_pitcher_action_zone.get(key2)
-
-        if stat is not None and stat["count"] >= MIN_COUNT_PITCHER_ACTION_ZONE:
-            return get_stat_score(stat, global_mean), "pitcher+action+zone", stat["count"]
-
-        key3 = (
-            row["balls"],
-            row["strikes"],
-            action_pitch_type,
-            action_zone,
-        )
-
-        stat = stats_count_action_zone.get(key3)
-
-        if stat is not None and stat["count"] >= MIN_COUNT_COUNT_ACTION_ZONE:
-            return get_stat_score(stat, global_mean), "count+action+zone", stat["count"]
-
-        key4 = (
-            action_pitch_type,
-            action_zone,
-        )
-
-        stat = stats_action_zone.get(key4)
-
-        if stat is not None and stat["count"] >= MIN_COUNT_ACTION_ZONE:
-            return get_stat_score(stat, global_mean), "action+zone", stat["count"]
-
-        key5 = (action_pitch_type,)
-
-        stat = stats_action.get(key5)
-
-        if stat is not None and stat["count"] >= MIN_COUNT_ACTION:
-            return get_stat_score(stat, global_mean), "action", stat["count"]
-
-        return global_mean, "global", len(train_df)
 
     # 실제 test action에 대한 예측 성능 확인
     actual_pred = []
@@ -290,7 +162,7 @@ def main():
         actual_pred.append(pred)
         actual_sources.append(source)
 
-    y_true = test_df[TARGET_COL].astype(float).values
+    y_true = test_df[ranker.TARGET_COL].astype(float).values
     y_pred = np.array(actual_pred)
 
     mae = mean_absolute_error(y_true, y_pred)

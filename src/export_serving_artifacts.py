@@ -5,8 +5,10 @@ import pandas as pd
 import torch
 
 if __package__:
+    from . import empirical_ranker as ranker
     from .run_paths import run_directory
 else:
+    import empirical_ranker as ranker
     from run_paths import run_directory
 
 
@@ -33,17 +35,6 @@ NUMERIC_COLS = [
     "runner_3b",
 ]
 
-TARGET_COL = "delta_run_exp"
-
-ALPHA = 50.0
-
-MIN_COUNT_PITCHER_COUNT_ACTION_ZONE = 5
-MIN_COUNT_PITCHER_ACTION_ZONE = 10
-MIN_COUNT_COUNT_ACTION_ZONE = 20
-MIN_COUNT_ACTION_ZONE = 30
-MIN_COUNT_ACTION = 50
-
-
 def safe_torch_load(path):
     try:
         return torch.load(path, map_location="cpu", weights_only=False)
@@ -64,39 +55,6 @@ def normalize_key_value(x):
         return float(x)
 
     return str(x)
-
-
-def make_key(row, cols):
-    return tuple(normalize_key_value(row[c]) for c in cols)
-
-
-def build_stat_dict(train_df, group_cols):
-    stats = (
-        train_df
-        .groupby(group_cols, dropna=False)[TARGET_COL]
-        .agg(["sum", "count", "mean"])
-        .reset_index()
-    )
-
-    stat_dict = {}
-
-    for _, row in stats.iterrows():
-        key = make_key(row, group_cols)
-
-        stat_dict[key] = {
-            "sum": float(row["sum"]),
-            "count": int(row["count"]),
-            "mean": float(row["mean"]),
-        }
-
-    return stat_dict
-
-
-def zone_sort_key(z):
-    try:
-        return int(str(z).replace("Z", ""))
-    except ValueError:
-        return 999
 
 
 def compute_scaler_from_sequence_data():
@@ -193,45 +151,16 @@ def export_outcome_ranker_artifact():
     split_idx = int(len(df) * 0.8)
     train_df = df.iloc[:split_idx].copy()
 
-    global_mean = float(train_df[TARGET_COL].mean())
+    global_mean = float(train_df[ranker.TARGET_COL].mean())
 
     print("\n===== Outcome artifact 생성 =====")
     print("전체:", df.shape)
     print("Train:", train_df.shape)
     print("global_mean:", global_mean)
 
-    stats_pitcher_count_action_zone = build_stat_dict(
-        train_df,
-        ["pitcher", "balls", "strikes", "action_pitch_type", "action_zone"],
-    )
+    stats = ranker.build_stat_tables(train_df, normalize_key_value=normalize_key_value)
 
-    stats_pitcher_action_zone = build_stat_dict(
-        train_df,
-        ["pitcher", "action_pitch_type", "action_zone"],
-    )
-
-    stats_count_action_zone = build_stat_dict(
-        train_df,
-        ["balls", "strikes", "action_pitch_type", "action_zone"],
-    )
-
-    stats_action_zone = build_stat_dict(
-        train_df,
-        ["action_pitch_type", "action_zone"],
-    )
-
-    stats_action = build_stat_dict(
-        train_df,
-        ["action_pitch_type"],
-    )
-
-    valid_zones = sorted(
-        [
-            z for z in train_df["action_zone"].dropna().unique().tolist()
-            if str(z).startswith("Z") and z not in ["ZPAD", "ZUNK"]
-        ],
-        key=zone_sort_key,
-    )
+    valid_zones = ranker.candidate_zones(train_df)
 
     pitcher_top_pitches = (
         train_df
@@ -256,26 +185,14 @@ def export_outcome_ranker_artifact():
     ][:3]
 
     artifact = {
-        "target_col": TARGET_COL,
+        "target_col": ranker.TARGET_COL,
         "global_mean": global_mean,
-        "alpha": ALPHA,
-        "thresholds": {
-            "pitcher_count_action_zone": MIN_COUNT_PITCHER_COUNT_ACTION_ZONE,
-            "pitcher_action_zone": MIN_COUNT_PITCHER_ACTION_ZONE,
-            "count_action_zone": MIN_COUNT_COUNT_ACTION_ZONE,
-            "action_zone": MIN_COUNT_ACTION_ZONE,
-            "action": MIN_COUNT_ACTION,
-        },
+        "alpha": ranker.DEFAULT_ALPHA,
+        "thresholds": dict(ranker.DEFAULT_THRESHOLDS),
         "valid_zones": valid_zones,
         "pitcher_top_pitches": pitcher_top_pitches,
         "global_top_pitches": global_top_pitches,
-        "stats": {
-            "pitcher_count_action_zone": stats_pitcher_count_action_zone,
-            "pitcher_action_zone": stats_pitcher_action_zone,
-            "count_action_zone": stats_count_action_zone,
-            "action_zone": stats_action_zone,
-            "action": stats_action,
-        },
+        "stats": stats,
     }
 
     OUTCOME_ARTIFACT_PATH.parent.mkdir(parents=True, exist_ok=True)

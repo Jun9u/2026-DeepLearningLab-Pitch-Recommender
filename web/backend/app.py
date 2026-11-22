@@ -20,6 +20,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
 # train_lstm.py 안의 LSTMPitchModel 구조를 그대로 사용
+from src.empirical_ranker import score_action  # noqa: E402
 from src.run_paths import run_directory  # noqa: E402
 from src.train_lstm import LSTMPitchModel  # noqa: E402
 
@@ -128,10 +129,6 @@ def encode_category(value, vocab, unk_token="UNK"):
         return vocab.get(unk_token, 0)
 
     return vocab.get(str(value), vocab.get(unk_token, 0))
-
-
-def smoothed_mean(sum_value, count_value, global_mean, alpha):
-    return (sum_value + alpha * global_mean) / (count_value + alpha)
 
 
 def clean_pitch_token(p):
@@ -353,74 +350,13 @@ class PitchRecommendationService:
     # Outcome ranker
     # --------------------------------------------------------
     def _predict_delta(self, req: RecommendRequest, action_pitch_type: str, action_zone: str):
-        thresholds = self.outcome_artifact["thresholds"]
-        global_mean = float(self.outcome_artifact["global_mean"])
-        alpha = float(self.outcome_artifact["alpha"])
-
-        pitcher = int(req.pitcher)
-        balls = int(req.balls)
-        strikes = int(req.strikes)
-
-        action_pitch_type = str(action_pitch_type).upper()
-        action_zone = str(action_zone).upper()
-
-        # 1. pitcher + count + action + zone
-        key1 = (pitcher, balls, strikes, action_pitch_type, action_zone)
-        stat = self.stats["pitcher_count_action_zone"].get(key1)
-
-        if stat is not None and stat["count"] >= thresholds["pitcher_count_action_zone"]:
-            return (
-                smoothed_mean(stat["sum"], stat["count"], global_mean, alpha),
-                "pitcher+count+action+zone",
-                stat["count"],
-            )
-
-        # 2. pitcher + action + zone
-        key2 = (pitcher, action_pitch_type, action_zone)
-        stat = self.stats["pitcher_action_zone"].get(key2)
-
-        if stat is not None and stat["count"] >= thresholds["pitcher_action_zone"]:
-            return (
-                smoothed_mean(stat["sum"], stat["count"], global_mean, alpha),
-                "pitcher+action+zone",
-                stat["count"],
-            )
-
-        # 3. count + action + zone
-        key3 = (balls, strikes, action_pitch_type, action_zone)
-        stat = self.stats["count_action_zone"].get(key3)
-
-        if stat is not None and stat["count"] >= thresholds["count_action_zone"]:
-            return (
-                smoothed_mean(stat["sum"], stat["count"], global_mean, alpha),
-                "count+action+zone",
-                stat["count"],
-            )
-
-        # 4. action + zone
-        key4 = (action_pitch_type, action_zone)
-        stat = self.stats["action_zone"].get(key4)
-
-        if stat is not None and stat["count"] >= thresholds["action_zone"]:
-            return (
-                smoothed_mean(stat["sum"], stat["count"], global_mean, alpha),
-                "action+zone",
-                stat["count"],
-            )
-
-        # 5. action only
-        key5 = (action_pitch_type,)
-        stat = self.stats["action"].get(key5)
-
-        if stat is not None and stat["count"] >= thresholds["action"]:
-            return (
-                smoothed_mean(stat["sum"], stat["count"], global_mean, alpha),
-                "action",
-                stat["count"],
-            )
-
-        # 6. global fallback
-        return global_mean, "global", 0
+        return score_action(
+            int(req.pitcher), int(req.balls), int(req.strikes),
+            str(action_pitch_type).upper(), str(action_zone).upper(),
+            stats=self.stats, thresholds=self.outcome_artifact["thresholds"],
+            global_mean=float(self.outcome_artifact["global_mean"]),
+            alpha=float(self.outcome_artifact["alpha"]), global_count=0,
+        )
 
     # --------------------------------------------------------
     # Final recommendation
