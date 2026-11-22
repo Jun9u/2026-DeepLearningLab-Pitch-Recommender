@@ -194,7 +194,7 @@
               <div class="field"><label>비교할 위치</label><div class="zone-chip" id="compareZoneChip">Z13</div></div>
             </div>
             <div class="button-row">
-              <button class="btn-ghost" onclick="setActiveCompare()">비교 위치 선택</button>
+              <button class="btn-ghost" onclick="setActiveCompare(event.detail === 0)">비교 위치 선택</button>
               <button class="btn-primary" onclick="compareAction()">직접 선택 비교</button>
             </div>
             <div id="compareResult" class="comparison-result" style="display:none;"></div>
