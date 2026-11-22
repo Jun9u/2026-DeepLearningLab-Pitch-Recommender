@@ -1,10 +1,15 @@
+import argparse
+import os
+
 import pandas as pd
 import numpy as np
 
 if __package__:
+    from .game_split import split_indices
     from .run_paths import run_directory
     from .sequence_helpers import add_runner_flags, iter_pitch_histories, left_pad as left_pad
 else:
+    from game_split import split_indices
     from run_paths import run_directory
     from sequence_helpers import add_runner_flags, iter_pitch_histories, left_pad as left_pad
 
@@ -60,7 +65,10 @@ def zone_to_token(x):
         return "ZUNK"
 
 
-def main():
+def main(*, train_only_rare_pitches=False):
+    if train_only_rare_pitches and not os.environ.get("PITCH_GAME_SPLIT"):
+        raise ValueError("--train-only-rare-pitches requires PITCH_GAME_SPLIT")
+
     if not INPUT_PATH.exists():
         raise FileNotFoundError(f"파일이 없습니다: {INPUT_PATH}")
 
@@ -95,7 +103,14 @@ def main():
     df["pitch_type_original"] = df["pitch_type"].astype(str)
     counts = df["pitch_type_original"].value_counts()
 
-    if GROUP_RARE_PITCHES:
+    if GROUP_RARE_PITCHES and train_only_rare_pitches:
+        train, _, _ = split_indices(df, with_validation=False)
+        train_counts = df.iloc[train]["pitch_type_original"].value_counts()
+        frequent = set(train_counts[train_counts >= MIN_PITCH_COUNT].index)
+        rare_set = set(counts.index) - frequent
+        print("\n===== 랭커 적합 경기의 pitch_type 분포 =====")
+        print(train_counts.head(30))
+    elif GROUP_RARE_PITCHES:
         rare_set = set(counts[counts < MIN_PITCH_COUNT].index)
     else:
         rare_set = set()
@@ -185,4 +200,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--train-only-rare-pitches", action="store_true",
+        help="Count rare pitches only in the games used to fit the outcome ranker (requires PITCH_GAME_SPLIT).",
+    )
+    main(train_only_rare_pitches=parser.parse_args().train_only_rare_pitches)
