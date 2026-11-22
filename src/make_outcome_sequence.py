@@ -65,7 +65,7 @@ def zone_to_token(x):
         return "ZUNK"
 
 
-def main(*, train_only_rare_pitches=False):
+def main(*, train_only_rare_pitches=False, keep_unlabeled_history=False):
     if train_only_rare_pitches and not os.environ.get("PITCH_GAME_SPLIT"):
         raise ValueError("--train-only-rare-pitches requires PITCH_GAME_SPLIT")
 
@@ -85,8 +85,8 @@ def main(*, train_only_rare_pitches=False):
 
     df["delta_run_exp"] = pd.to_numeric(df["delta_run_exp"], errors="coerce")
 
-    # 기대득점 모델에서는 현재 pitch_type, 현재 zone, delta_run_exp가 모두 필요함
-    df = df.dropna(subset=["pitch_type", "zone", "delta_run_exp"]).copy()
+    required = ["pitch_type"] if keep_unlabeled_history else ["pitch_type", "zone", "delta_run_exp"]
+    df = df.dropna(subset=required).copy()
 
     df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
 
@@ -96,26 +96,29 @@ def main(*, train_only_rare_pitches=False):
     # zone 토큰화
     df["zone_token"] = df["zone"].apply(zone_to_token)
 
-    # 이상한 zone은 현재 action으로 쓰기 어렵기 때문에 제외
-    df = df[df["zone_token"] != "ZUNK"].copy()
-
-    # 희귀 구종 통합
+    # Only pitches with a usable zone and a measured outcome can be prediction targets.
+    df["has_outcome"] = df["zone_token"].ne("ZUNK") & df["delta_run_exp"].notna()
     df["pitch_type_original"] = df["pitch_type"].astype(str)
-    counts = df["pitch_type_original"].value_counts()
+    outcome_rows = df.loc[df["has_outcome"]].copy()
+    if keep_unlabeled_history:
+        print("이력 전용 투구:", len(df) - len(outcome_rows))
+    else:
+        df = outcome_rows
+
+    # Fit the same pitch mapping on eligible rows, irrespective of history retention.
+    counts = outcome_rows["pitch_type_original"].value_counts()
+    fit_counts = counts
 
     if GROUP_RARE_PITCHES and train_only_rare_pitches:
-        train, _, _ = split_indices(df, with_validation=False)
-        train_counts = df.iloc[train]["pitch_type_original"].value_counts()
-        frequent = set(train_counts[train_counts >= MIN_PITCH_COUNT].index)
-        rare_set = set(counts.index) - frequent
+        train, _, _ = split_indices(outcome_rows, with_validation=False)
+        fit_counts = outcome_rows.iloc[train]["pitch_type_original"].value_counts()
         print("\n===== 랭커 적합 경기의 pitch_type 분포 =====")
-        print(train_counts.head(30))
-    elif GROUP_RARE_PITCHES:
-        rare_set = set(counts[counts < MIN_PITCH_COUNT].index)
-    else:
-        rare_set = set()
+        print(fit_counts.head(30))
 
-    rare_set = rare_set.union(FORCE_OTHER_PITCHES)
+    rare_set = set(FORCE_OTHER_PITCHES)
+    if GROUP_RARE_PITCHES:
+        frequent = set(fit_counts[fit_counts >= MIN_PITCH_COUNT].index)
+        rare_set.update(set(df["pitch_type_original"].unique()) - frequent)
 
     df["pitch_type_mapped"] = df["pitch_type_original"].apply(
         lambda x: "OTHER" if x in rare_set else x
@@ -132,6 +135,8 @@ def main(*, train_only_rare_pitches=False):
 
     samples = []
     for current, history in iter_pitch_histories(df, "pitch_type_mapped"):
+        if keep_unlabeled_history and not current["has_outcome"]:
+            continue
         sample = {
             "game_date": current["game_date"],
             "game_pk": current["game_pk"],
@@ -205,4 +210,9 @@ if __name__ == "__main__":
         "--train-only-rare-pitches", action="store_true",
         help="Count rare pitches only in the games used to fit the outcome ranker (requires PITCH_GAME_SPLIT).",
     )
-    main(train_only_rare_pitches=parser.parse_args().train_only_rare_pitches)
+    parser.add_argument(
+        "--keep-unlabeled-history", action="store_true",
+        help="Keep known pitches with a missing zone or outcome in history while still filtering target rows.",
+    )
+    args = parser.parse_args()
+    main(train_only_rare_pitches=args.train_only_rare_pitches, keep_unlabeled_history=args.keep_unlabeled_history)
