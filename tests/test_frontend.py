@@ -15,6 +15,8 @@ class FrontendTests(unittest.TestCase):
             index.write_text("<!doctype html>", encoding="utf-8")
             assets = index.with_name("assets")
             assets.mkdir()
+            for filename in ("styles.css", "app.js"):
+                (assets / filename).touch()
 
             app = FastAPI()
             add_frontend_routes(app, index)
@@ -34,3 +36,21 @@ class FrontendTests(unittest.TestCase):
             page = next(route for route in app.routes if route.path == "/").endpoint()
             self.assertIsInstance(page, HTMLResponse)
             self.assertIn(b'href="/docs"', page.body)
+
+    def test_keeps_the_documentation_link_when_an_asset_is_missing(self):
+        for available_assets in ((), ("styles.css",), ("app.js",)):
+            with self.subTest(available_assets=available_assets), TemporaryDirectory() as directory:
+                index = Path(directory) / "index.html"
+                index.write_text("<!doctype html>", encoding="utf-8")
+                if available_assets:
+                    assets = index.with_name("assets")
+                    assets.mkdir()
+                    for filename in available_assets:
+                        (assets / filename).touch()
+
+                app = FastAPI()
+                add_frontend_routes(app, index)
+
+                page = next(route for route in app.routes if route.path == "/").endpoint()
+                self.assertIsInstance(page, HTMLResponse)
+                self.assertIn(b'href="/docs"', page.body)

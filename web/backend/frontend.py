@@ -9,12 +9,15 @@ from fastapi.staticfiles import StaticFiles
 
 def add_frontend_routes(app: FastAPI, index_path: Path):
     assets_path = index_path.with_name("assets")
-    if assets_path.is_dir():
+    assets_mounted = assets_path.is_dir()
+    if assets_mounted:
         app.mount("/assets", StaticFiles(directory=assets_path), name="frontend-assets")
+
+    required_files = (index_path, assets_path / "styles.css", assets_path / "app.js")
 
     @app.get("/")
     def index():
-        if index_path.exists():
+        if assets_mounted and all(path.is_file() for path in required_files):
             return FileResponse(index_path)
 
         return HTMLResponse(
