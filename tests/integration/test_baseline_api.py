@@ -54,6 +54,7 @@ class BaselineIntegrationTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             stage_web(root)
+            command(root, "-c", "from web.backend.service import PitchRecommendationService")
             result = subprocess.run(
                 uvicorn_args(), cwd=root, env=pipeline_env(root), timeout=45,
                 capture_output=True, encoding="utf-8",
@@ -182,6 +183,15 @@ with patch("pybaseball.statcast", return_value=pd.read_csv("fixture.csv")):
         status, invalid = request(base, "/compare", {**REQUEST, "action_pitch_type": "X", "action_zone": "Z5"})
         self.assertEqual(status, 200)
         self.assertIn("error", invalid)
+        status, invalid_zone = request(
+            base, "/compare", {**REQUEST, "action_pitch_type": "FF", "action_zone": "99"},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(invalid_zone["error"], "지원하지 않는 zone입니다.")
+        self.assertEqual(invalid_zone["input_zone"], "Z99")
+        status, missing_action = request(base, "/compare", {**REQUEST, "action_pitch_type": "FF"})
+        self.assertEqual(status, 422)
+        self.assertEqual(missing_action["detail"][0]["loc"], ["body", "action_zone"])
         status, invalid = request(base, "/recommend", {**REQUEST, "balls": 4})
         self.assertEqual(status, 422)
         self.assertEqual(invalid["detail"][0]["loc"], ["body", "balls"])

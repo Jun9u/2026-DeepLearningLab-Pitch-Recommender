@@ -236,7 +236,11 @@ uvicorn web.backend.app:app --reload --host 127.0.0.1 --port 8000
 │   ├── outcome_empirical_recommender.py
 │   └── export_serving_artifacts.py
 └── web/
-    ├── backend/app.py
+    ├── backend/
+    │   ├── app.py
+    │   ├── schemas.py
+    │   ├── service.py
+    │   └── pitch_inputs.py
     └── frontend/index.html
 ```
 
