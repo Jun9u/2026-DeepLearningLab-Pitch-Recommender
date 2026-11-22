@@ -2,8 +2,10 @@ import pandas as pd
 from sklearn.metrics import accuracy_score, f1_score
 
 if __package__:
+    from .game_split import split_indices
     from .run_paths import run_directory
 else:
+    from game_split import split_indices
     from run_paths import run_directory
 
 RUN_DIR = run_directory()
@@ -119,10 +121,9 @@ def main():
     if sort_cols:
         df = df.sort_values(sort_cols).reset_index(drop=True)
 
-    split_idx = int(len(df) * 0.8)
-
-    train_df = df.iloc[:split_idx].copy()
-    test_df = df.iloc[split_idx:].copy()
+    train, _, test = split_indices(df, with_validation=False)
+    train_df = df.iloc[train].copy()
+    test_df = df.iloc[test].copy()
 
     print("===== 데이터 크기 =====")
     print("전체:", df.shape)

@@ -21,7 +21,7 @@ PUBLIC_RESULTS = {
 }
 
 
-def pipeline_env(root, *, run_directory=None):
+def pipeline_env(root, *, run_directory=None, game_split=None):
     env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1", CUDA_VISIBLE_DEVICES="",
                OMP_NUM_THREADS="2", MKL_NUM_THREADS="2", OPENBLAS_NUM_THREADS="2",
                PYBASEBALL_CACHE=str(root / "pybaseball-cache"), PYTHONIOENCODING="utf-8")
@@ -29,12 +29,17 @@ def pipeline_env(root, *, run_directory=None):
         env.pop("PITCH_RUN_DIR", None)
     else:
         env["PITCH_RUN_DIR"] = str(run_directory)
+    if game_split is None:
+        env.pop("PITCH_GAME_SPLIT", None)
+    else:
+        env["PITCH_GAME_SPLIT"] = str(game_split)
     return env
 
 
-def command(root, *args, run_directory=None):
+def command(root, *args, run_directory=None, game_split=None):
     completed = subprocess.run(
-        [sys.executable, *args], cwd=root, env=pipeline_env(root, run_directory=run_directory),
+        [sys.executable, *args], cwd=root,
+        env=pipeline_env(root, run_directory=run_directory, game_split=game_split),
         capture_output=True, encoding="utf-8", timeout=120,
     )
     if completed.returncode:
@@ -42,8 +47,8 @@ def command(root, *args, run_directory=None):
     return completed.stdout
 
 
-def run_step(root, module, *, run_directory=None):
-    return command(root, str(REPO / "src" / f"{module}.py"), run_directory=run_directory)
+def run_step(root, module, *, run_directory=None, game_split=None):
+    return command(root, str(REPO / "src" / f"{module}.py"), run_directory=run_directory, game_split=game_split)
 
 
 def stage_web(root):

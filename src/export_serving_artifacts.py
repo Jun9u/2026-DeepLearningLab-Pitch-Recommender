@@ -6,9 +6,11 @@ import torch
 
 if __package__:
     from . import empirical_ranker as ranker
+    from .game_split import split_indices
     from .run_paths import run_directory
 else:
     import empirical_ranker as ranker
+    from game_split import split_indices
     from run_paths import run_directory
 
 
@@ -76,8 +78,8 @@ def compute_scaler_from_sequence_data():
         ["game_date", "game_pk", "at_bat_number", "pitch_number"]
     ).reset_index(drop=True)
 
-    train_end = int(len(df) * 0.7)
-    train_df = df.iloc[:train_end].copy()
+    train, _, _ = split_indices(df)
+    train_df = df.iloc[train].copy()
 
     numeric = train_df[NUMERIC_COLS].astype(float).values
 
@@ -147,9 +149,8 @@ def export_outcome_ranker_artifact():
     if sort_cols:
         df = df.sort_values(sort_cols).reset_index(drop=True)
 
-    # outcome recommender와 동일하게 80/20 split의 train 구간만 사용
-    split_idx = int(len(df) * 0.8)
-    train_df = df.iloc[:split_idx].copy()
+    train, _, _ = split_indices(df, with_validation=False)
+    train_df = df.iloc[train].copy()
 
     global_mean = float(train_df[ranker.TARGET_COL].mean())
 

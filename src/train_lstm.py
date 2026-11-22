@@ -14,8 +14,10 @@ from sklearn.preprocessing import StandardScaler
 
 if __package__:
     from .run_paths import run_directory
+    from .game_split import split_indices
 else:
     from run_paths import run_directory
+    from game_split import split_indices
 
 
 # =========================
@@ -487,14 +489,10 @@ def main():
     if sort_cols:
         df = df.sort_values(sort_cols).reset_index(drop=True)
 
-    # 시간 순서 기반 분할
-    n = len(df)
-    train_end = int(n * 0.7)
-    valid_end = int(n * 0.8)
-
-    train_df = df.iloc[:train_end].copy()
-    valid_df = df.iloc[train_end:valid_end].copy()
-    test_df = df.iloc[valid_end:].copy()
+    train, valid, test = split_indices(df)
+    train_df = df.iloc[train].copy()
+    valid_df = df.iloc[valid].copy()
+    test_df = df.iloc[test].copy()
 
     print("===== 실행 환경 =====")
     print("experiment:", EXPERIMENT_NAME)

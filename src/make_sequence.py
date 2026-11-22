@@ -1,9 +1,11 @@
 import pandas as pd
 
 if __package__:
+    from .game_split import split_indices
     from .run_paths import run_directory
     from .sequence_helpers import iter_pitch_histories, left_pad as left_pad, sort_pitches
 else:
+    from game_split import split_indices
     from run_paths import run_directory
     from sequence_helpers import iter_pitch_histories, left_pad as left_pad, sort_pitches
 
@@ -113,8 +115,8 @@ def main():
 
     if GROUP_RARE_PITCHES:
         # train 기준으로 희귀 구종 결정
-        train_end = int(len(seq_df) * 0.7)
-        train_counts = seq_df.iloc[:train_end]["target_pitch_type"].value_counts()
+        train, _, _ = split_indices(seq_df)
+        train_counts = seq_df.iloc[train]["target_pitch_type"].value_counts()
 
         rare_set = set(train_counts[train_counts < MIN_TARGET_COUNT].index)
         rare_set = rare_set.union(FORCE_OTHER_PITCHES)
