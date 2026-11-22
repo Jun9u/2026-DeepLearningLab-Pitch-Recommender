@@ -1,4 +1,3 @@
-    const OUTCOME_TRAIN_ROWS = 1326278;
     const PITCH_TYPES = ["FF", "SI", "SL", "CH", "FC", "ST", "CU", "FS", "KC"];
     const PITCH_TYPES_WITH_NONE = ["NONE", ...PITCH_TYPES];
 
