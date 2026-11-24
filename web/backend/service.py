@@ -8,7 +8,7 @@ import torch
 
 from src.empirical_ranker import score_action
 from src.train_lstm import LSTMPitchModel
-from .pitch_inputs import clean_pitch_token, encode_category, encode_sequence, normalize_zone
+from .pitch_inputs import clean_pitch_token, encode_category, encode_pitch_history, normalize_zone
 from .schemas import CompareRequest, RecommendRequest, req_to_dict
 
 
@@ -136,30 +136,8 @@ class PitchRecommendationService:
     # LSTM Top-K pitch type prediction
     # --------------------------------------------------------
     def predict_lstm_topk(self, req: RecommendRequest, k=3):
-        prev_pitch_types = []
-
-        for p in req.prev_pitch_types:
-            p = clean_pitch_token(p)
-            if p is None:
-                continue
-            prev_pitch_types.append(p)
-
-        prev_zones = [normalize_zone(z) for z in req.prev_zones]
-
-        seq_pitch = encode_sequence(
-            prev_pitch_types,
-            self.pitch_vocab,
-            max_len=5,
-            pad_token="PAD",
-            unk_token="UNK",
-        )
-
-        seq_zone = encode_sequence(
-            prev_zones,
-            self.zone_vocab,
-            max_len=5,
-            pad_token="ZPAD",
-            unk_token="ZUNK",
+        seq_pitch, seq_zone = encode_pitch_history(
+            req.prev_pitch_types, req.prev_zones, self.pitch_vocab, self.zone_vocab,
         )
 
         numeric_values = np.array(

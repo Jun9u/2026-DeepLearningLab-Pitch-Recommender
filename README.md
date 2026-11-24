@@ -203,6 +203,8 @@ export PITCH_GAME_SPLIT="$PITCH_RUN_DIR/data/processed/game_split.csv"
 
 이후 같은 터미널에서 위 파이프라인의 `preprocess.py`부터 실행합니다. 분류 시퀀스의 희귀 구종 기준과 LSTM·Transformer는 `train`을 사용하고, 두 모델은 `validation`으로 체크포인트를 고릅니다. 다수결과 랭커는 `train`과 `validation`을 합쳐 적합합니다. 평가는 모두 같은 `test` 경기 목록을 사용하며, 각 파이프라인의 기존 필터에 따라 투구 수는 달라질 수 있습니다. `PITCH_GAME_SPLIT`을 생략하면 기존 투구 행 단위 분할을 사용합니다.
 
+LSTM과 Transformer는 검증·테스트의 정답 구종이 학습 클래스에 없는 행을 평가에서 제외합니다. 두 분할 모드 모두 구간별 제외 행 수와 전체 행 수를 출력하며, 평가 행이 한 건도 남지 않으면 학습을 시작하기 전에 오류를 표시합니다.
+
 같은 경기 분할에서 랭커용 희귀 구종 기준만 바꿔 실험하려면 별도 `PITCH_RUN_DIR`에 같은 원본 입력, 분할표, LSTM 예측 CSV와 체크포인트를 준비합니다. 같은 `PITCH_GAME_SPLIT`을 지정하고 `make_outcome_sequence.py`에 `--train-only-rare-pitches`를 추가한 뒤 랭커 평가와 서빙 파일 생성을 실행합니다. 이 옵션은 랭커를 적합하는 `train`·`validation` 경기의 필터 통과 투구만 집계합니다. 그 집계에서 500건 미만이거나 등장하지 않은 구종과 기존 강제 통합 구종은 `OTHER`가 됩니다.
 
 ### 웹 서버 실행
