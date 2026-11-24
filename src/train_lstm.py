@@ -286,7 +286,6 @@ def main():
         throws_vocab,
         target_to_idx,
         scaler,
-        max_len=5,
     )
 
     valid_dataset = training.PitchSequenceDataset(
@@ -298,7 +297,6 @@ def main():
         throws_vocab,
         target_to_idx,
         scaler,
-        max_len=5,
     )
 
     test_dataset = training.PitchSequenceDataset(
@@ -310,7 +308,6 @@ def main():
         throws_vocab,
         target_to_idx,
         scaler,
-        max_len=5,
     )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

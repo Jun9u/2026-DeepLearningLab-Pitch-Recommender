@@ -1,6 +1,7 @@
 import pandas as pd
 import pytest
 
+from src.sequence_helpers import iter_pitch_histories
 from src.training_features import (
     TARGET_COL,
     build_vocab_from_column,
@@ -9,6 +10,7 @@ from src.training_features import (
     encode_sequence,
     filter_evaluation_targets,
 )
+from web.backend.pitch_inputs import encode_pitch_history
 
 
 def test_encode_sequence_preserves_first_seen_ids_and_recent_history():
@@ -20,6 +22,26 @@ def test_encode_sequence_preserves_first_seen_ids_and_recent_history():
     assert encode_sequence("Z4|Z9|Z2|Z11", vocab, **options) == [2, 3, 1]
     assert encode_sequence("Z4", vocab, **options) == [0, 0, 4]
     assert encode_sequence(None, vocab, **options) == [0, 0, 0]
+
+
+def test_default_history_matches_preprocessing_training_and_serving():
+    pitches = ["FF", "SL", "CH", "CU", "SI", "FC", "FF"]
+    zones = [f"Z{index}" for index in range(1, 8)]
+    frame = pd.DataFrame({
+        "game_date": "2025-06-01", "game_pk": 100, "at_bat_number": 1,
+        "pitch_number": range(1, 8), "pitch_type": pitches, "zone_token": zones,
+    })
+    pitch_vocab = {"PAD": 0, "UNK": 1, **{pitch: index for index, pitch in enumerate(pitches[:-1], 2)}}
+    zone_vocab = {"ZPAD": 0, "ZUNK": 1, **{zone: index for index, zone in enumerate(zones, 2)}}
+    histories = [history for _, history in iter_pitch_histories(frame, "pitch_type")]
+
+    for previous, expected in [(1, [0, 0, 0, 0, 2]), (6, [3, 4, 5, 6, 7])]:
+        history = histories[previous - 1]
+        training_pitches = encode_sequence(history["seq_pitch_type"], pitch_vocab)
+        training_zones = encode_sequence(history["seq_zone"], zone_vocab, pad_token="ZPAD", unk_token="ZUNK")
+        serving = encode_pitch_history(pitches[:previous], zones[:previous], pitch_vocab, zone_vocab)
+
+        assert (training_pitches, training_zones) == serving == (expected, expected)
 
 
 def test_encode_category_stringifies_ids_and_falls_back_to_unknown():

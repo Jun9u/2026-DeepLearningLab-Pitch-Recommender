@@ -58,7 +58,7 @@ class PitchSequenceDataset(Dataset):
         throws_vocab,
         target_to_idx,
         scaler,
-        max_len=5,
+        max_len=features.HISTORY_LENGTH,
     ):
         self.df = df.reset_index(drop=True)
 
