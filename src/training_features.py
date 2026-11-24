@@ -2,6 +2,11 @@
 
 import pandas as pd
 
+if __package__:
+    from .sequence_helpers import HISTORY_LENGTH, left_pad
+else:
+    from sequence_helpers import HISTORY_LENGTH, left_pad
+
 
 TARGET_COL = "target_pitch_type"
 
@@ -60,15 +65,8 @@ def build_vocab_from_column(series, special_tokens):
     return vocab
 
 
-def encode_sequence(text, vocab, max_len=5, pad_token="PAD", unk_token="UNK"):
-    tokens = split_tokens(text)
-
-    if len(tokens) > max_len:
-        tokens = tokens[-max_len:]
-
-    if len(tokens) < max_len:
-        tokens = [pad_token] * (max_len - len(tokens)) + tokens
-
+def encode_sequence(text, vocab, max_len=HISTORY_LENGTH, pad_token="PAD", unk_token="UNK"):
+    tokens = left_pad(split_tokens(text), max_len, pad_token)
     unk_id = vocab.get(unk_token, 1)
 
     return [vocab.get(token, unk_id) for token in tokens]

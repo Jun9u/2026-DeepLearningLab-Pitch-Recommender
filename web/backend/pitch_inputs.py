@@ -1,6 +1,6 @@
 """Normalize and encode pitch inputs for serving."""
 
-from src.sequence_helpers import left_pad
+from src.sequence_helpers import HISTORY_LENGTH, left_pad
 
 
 def normalize_zone(z):
@@ -24,7 +24,7 @@ def normalize_zone(z):
         return "ZUNK"
 
 
-def encode_sequence(tokens, vocab, max_len=5, pad_token="PAD", unk_token="UNK"):
+def encode_sequence(tokens, vocab, max_len=HISTORY_LENGTH, pad_token="PAD", unk_token="UNK"):
     tokens = left_pad(tokens, max_len, pad_token)
     unk_id = vocab.get(unk_token, 1)
     return [vocab.get(token, unk_id) for token in tokens]
