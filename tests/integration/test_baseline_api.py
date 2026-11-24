@@ -168,6 +168,11 @@ with patch("pybaseball.statcast", return_value=pd.read_csv("fixture.csv")) as st
         self.assertEqual(meta["valid_zones"], [f"Z{zone}" for zone in range(1, 10)])
         _, schema = request(base, "/openapi.json")
         self.assertEqual(set(schema["paths"]["/recommend"]), {"post"})
+        compare_responses = schema["paths"]["/compare"]["post"]["responses"]
+        validation_schema, action_error_schema = compare_responses["422"]["content"]["application/json"]["schema"]["anyOf"]
+        self.assertEqual(validation_schema["$ref"], "#/components/schemas/HTTPValidationError")
+        self.assertIn("HTTPValidationError", schema["components"]["schemas"])
+        self.assertEqual(action_error_schema["required"], ["error"])
 
         status, recommendation = request(base, "/recommend", REQUEST)
         self.assertEqual(status, 200)
@@ -218,21 +223,25 @@ with patch("pybaseball.statcast", return_value=pd.read_csv("fixture.csv")) as st
                 self.assertEqual(detail["type"], "pitch_history_length_mismatch")
                 self.assertEqual(detail["loc"], ["body"])
                 self.assertIn("같은 개수", detail["msg"])
-        status, invalid = request(base, "/compare", {**REQUEST, "action_pitch_type": "X", "action_zone": "Z5"})
-        self.assertEqual(status, 200)
-        self.assertIn("error", invalid)
-        status, invalid_zone = request(
-            base, "/compare", {**REQUEST, "action_pitch_type": "FF", "action_zone": "99"},
+        invalid_actions = (
+            (" other ", "Z5", {"error": "유효하지 않은 구종입니다.", "input_pitch_type": " other "}),
+            (" x ", "Z5", {
+                "error": "지원하지 않는 구종입니다.",
+                "input_pitch_type": "X",
+                "supported_pitch_types": meta["supported_pitch_types"],
+            }),
+            ("FF", "99", {
+                "error": "지원하지 않는 zone입니다.", "input_zone": "Z99", "valid_zones": meta["valid_zones"],
+            }),
+            ("FF", "Infinity", {
+                "error": "지원하지 않는 zone입니다.", "input_zone": "ZUNK", "valid_zones": meta["valid_zones"],
+            }),
         )
-        self.assertEqual(status, 200)
-        self.assertEqual(invalid_zone["error"], "지원하지 않는 zone입니다.")
-        self.assertEqual(invalid_zone["input_zone"], "Z99")
-        status, nonfinite_zone = request(
-            base, "/compare", {**REQUEST, "action_pitch_type": "FF", "action_zone": "Infinity"},
-        )
-        self.assertEqual(status, 200)
-        self.assertEqual(nonfinite_zone["error"], invalid_zone["error"])
-        self.assertEqual(nonfinite_zone["input_zone"], "ZUNK")
+        for pitch, zone, error in invalid_actions:
+            with self.subTest(pitch=pitch, zone=zone):
+                self.assertEqual(request(base, "/compare", {
+                    **REQUEST, "action_pitch_type": pitch, "action_zone": zone,
+                }), (422, error))
 
         status, nonfinite_history = request(base, "/recommend", {**REQUEST, "prev_zones": ["Infinity"]})
         self.assertEqual(status, 200)
