@@ -3,10 +3,12 @@ from contextlib import contextmanager
 import os
 from pathlib import Path
 import re
+import runpy
 import shutil
 import subprocess
 import sys
 import time
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -49,6 +51,13 @@ def command(root, *args, run_directory=None, game_split=None):
 
 def run_step(root, module, *, run_directory=None, game_split=None):
     return command(root, str(REPO / "src" / f"{module}.py"), run_directory=run_directory, game_split=game_split)
+
+
+def run_cli_in_process(root, module, *args, game_split=None):
+    """Run an entry point with the temporary directory and include it in test coverage."""
+    env = pipeline_env(root, run_directory=root, game_split=game_split)
+    with patch.dict(os.environ, env, clear=True), patch.object(sys, "argv", [module, *args]):
+        runpy.run_module(f"src.{module}", run_name="__main__")
 
 
 def stage_web(root):

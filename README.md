@@ -207,6 +207,8 @@ LSTM과 Transformer는 검증·테스트의 정답 구종이 학습 클래스에
 
 같은 경기 분할에서 랭커용 희귀 구종 기준만 바꿔 실험하려면 별도 `PITCH_RUN_DIR`에 같은 원본 입력, 분할표, LSTM 예측 CSV와 체크포인트를 준비합니다. 같은 `PITCH_GAME_SPLIT`을 지정하고 `make_outcome_sequence.py`에 `--train-only-rare-pitches`를 추가한 뒤 랭커 평가와 서빙 파일 생성을 실행합니다. 이 옵션은 랭커를 적합하는 `train`·`validation` 경기의 필터 통과 투구만 집계합니다. 그 집계에서 500건 미만이거나 등장하지 않은 구종과 기존 강제 통합 구종은 `OTHER`가 됩니다.
 
+결측 투구 이력만 비교하려면 같은 설정과 별도 실행 경로를 쓰고 `make_outcome_sequence.py`에 `--keep-unlabeled-history`를 추가합니다. 구종을 아는 투구는 위치나 결과값이 빠져도 같은 타석의 이력에 남고, 비어 있는 위치는 `ZUNK`로 기록됩니다. 예측 대상은 위치와 결과값이 모두 있는 투구입니다. 해당 타석의 첫 투구에 결과값이 없으면 그다음 투구부터 이력을 사용할 수 있습니다. 희귀 구종 빈도는 기존과 같이 위치와 결과값이 모두 있는 투구에서 계산합니다.
+
 ### 웹 서버 실행
 
 선택한 실행 경로의 `models/`에 `lstm_serving_artifact.pt`와 `outcome_ranker_artifact.pkl`이 생성되면 서버를 실행합니다. 새 터미널에서 실행할 때는 수집·학습에 사용한 값을 다시 지정하세요.
