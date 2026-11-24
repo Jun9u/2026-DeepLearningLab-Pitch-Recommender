@@ -566,13 +566,24 @@
     }
 
     async function loadHealth() {
+      const healthText = document.getElementById("healthText");
       try {
         const res = await fetch("/health");
         const data = await res.json();
+        if (res.status === 503 && data.status === "not_ready") {
+          healthText.textContent = "서빙 모델 파일을 준비한 뒤 서버를 재시작하세요.";
+          return;
+        }
+        if (!res.ok || data.status !== "ok") {
+          healthText.textContent = "서버 상태 확인 실패";
+          return;
+        }
         const pitchCount = (data.supported_pitch_types || []).length;
-        document.getElementById("healthText").innerHTML = `서버 정상 작동<br/>추천 엔진 준비 완료<br/>지원 구종 ${pitchCount}종`;
+        healthText.innerHTML = `서버 정상 작동<br/>추천 엔진 준비 완료<br/>지원 구종 ${pitchCount}종`;
+        document.getElementById("recommendButton").disabled = false;
+        document.getElementById("compareButton").disabled = false;
       } catch (err) {
-        document.getElementById("healthText").textContent = "서버 상태 확인 실패";
+        healthText.textContent = "서버 상태 확인 실패";
       }
     }
 

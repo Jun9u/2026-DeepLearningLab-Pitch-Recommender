@@ -141,7 +141,8 @@ FastAPI 백엔드와 단일 HTML 프론트엔드로 구현한 **로컬 실행형
 | 경로 | 기능 |
 | --- | --- |
 | `GET /` | 웹 인터페이스 |
-| `GET /health` | 서버 및 로드된 모델 상태 |
+| `GET /health` | 추천 모델 준비 상태. 파일 누락 시 `503`과 누락 파일명 반환 |
+| `GET /live` | 서버 프로세스 응답 확인 |
 | `GET /meta` | 지원 구종, zone 등 메타데이터 |
 | `POST /recommend` | 후보 생성 및 경험적 랭킹 |
 | `POST /compare` | 사용자가 선택한 조합과 추천 점수 비교 |
@@ -209,7 +210,7 @@ LSTM과 Transformer는 검증·테스트의 정답 구종이 학습 클래스에
 
 ### 웹 서버 실행
 
-선택한 실행 경로의 `models/`에 `lstm_serving_artifact.pt`와 `outcome_ranker_artifact.pkl`이 생성되면 서버를 실행합니다. 새 터미널에서 실행할 때는 수집·학습에 사용한 값을 다시 지정하세요.
+서버는 선택한 실행 경로의 `models/` 아래 `lstm_serving_artifact.pt`와 `outcome_ranker_artifact.pkl`을 시작할 때 로드합니다. 새 터미널에서 실행할 때는 수집·학습에 사용한 실행 경로를 다시 지정하세요.
 
 ```bash
 export PITCH_RUN_DIR="$PWD/runs/statcast"
@@ -218,7 +219,7 @@ uvicorn web.backend.app:app --reload --host 127.0.0.1 --port 8000
 
 접속: [http://127.0.0.1:8000](http://127.0.0.1:8000) · [API 문서](http://127.0.0.1:8000/docs)
 
-**중요:** 서버는 시작 시 두 artifact를 로드합니다. 파일이 없으면 `/health`도 제공되지 않고 서버 실행이 실패합니다. 저장소를 복제한 직후에는 데이터 수집·학습 또는 별도로 확보한 동일 구조의 artifact가 필요합니다.
+서빙 파일이 없어도 웹 화면, `/docs`, `/live`를 사용할 수 있습니다. 이 상태에서 `/health`는 `503`과 누락 파일명을 반환하고, `/meta`·`/recommend`·`/compare`도 `503`을 반환합니다. 서빙 파일을 생성하거나 별도로 확보한 뒤 서버를 재시작하면 추천·비교를 사용할 수 있습니다. 두 파일이 존재하지만 로드할 수 없는 경우는 서버 시작 오류로 보고합니다.
 
 ## 7. 저장소 구성
 

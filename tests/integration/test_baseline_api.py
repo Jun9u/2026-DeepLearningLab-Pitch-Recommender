@@ -1,7 +1,6 @@
 import json
 from pathlib import Path
 import shutil
-import subprocess
 from tempfile import TemporaryDirectory
 import unittest
 from urllib.error import HTTPError
@@ -14,12 +13,10 @@ from tests.support import (
     REPO,
     api_server,
     command,
-    pipeline_env,
     pipeline_pitches,
     run_step,
     sparse_outcome_rows,
     stage_web,
-    uvicorn_args,
     write_csv,
 )
 
@@ -50,18 +47,28 @@ def request(base, path, payload=None):
 
 
 class BaselineIntegrationTests(unittest.TestCase):
-    def test_missing_artifacts_prevent_server_start(self):
+    def test_missing_artifacts_leave_static_routes_available(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             stage_web(root)
-            command(root, "-c", "from web.backend.service import PitchRecommendationService")
-            result = subprocess.run(
-                uvicorn_args(), cwd=root, env=pipeline_env(root), timeout=45,
-                capture_output=True, encoding="utf-8",
-            )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("FileNotFoundError", result.stderr)
-        self.assertIn("lstm_serving_artifact.pt", result.stderr)
+            with api_server(root) as base:
+                for path in ("/", "/assets/styles.css", "/assets/app.js", "/docs"):
+                    with self.subTest(path=path):
+                        self.assertEqual(request(base, path)[0], 200)
+                self.assertEqual(request(base, "/live"), (200, {"status": "ok"}))
+                self.assertEqual(request(base, "/health"), (503, {
+                    "status": "not_ready",
+                    "missing_artifacts": ["lstm_serving_artifact.pt", "outcome_ranker_artifact.pkl"],
+                }))
+                for path, payload in (
+                    ("/meta", None),
+                    ("/recommend", REQUEST),
+                    ("/compare", {**REQUEST, "action_pitch_type": "FF", "action_zone": "Z5"}),
+                ):
+                    with self.subTest(path=path):
+                        status, response = request(base, path, payload)
+                        self.assertEqual(status, 503)
+                        self.assertIn("서버를 재시작", response["detail"])
 
     def test_synthetic_workflow_and_model_api(self):
         with TemporaryDirectory() as directory:
@@ -149,6 +156,7 @@ with patch("pybaseball.statcast", return_value=pd.read_csv("fixture.csv")):
                     self.assertIn(response.headers.get_content_type(), content_types)
                     self.assertEqual(response.read(), (REPO / "web/frontend/assets" / name).read_bytes())
         self.assertEqual(request(base, "/assets/missing.js")[0], 404)
+        self.assertEqual(request(base, "/live"), (200, {"status": "ok"}))
         status, health = request(base, "/health")
         self.assertEqual((status, health["status"]), (200, "ok"))
         self.assertEqual(health["num_pitchers_outcome"], 4)

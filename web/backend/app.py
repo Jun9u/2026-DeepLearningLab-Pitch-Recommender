@@ -1,8 +1,10 @@
+from contextlib import asynccontextmanager
 from pathlib import Path
 import sys
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 
 # ============================================================
@@ -15,7 +17,6 @@ sys.path.append(str(PROJECT_ROOT))
 from src.run_paths import run_directory  # noqa: E402
 from web.backend.frontend import add_frontend_routes  # noqa: E402
 from web.backend.schemas import CompareRequest, RecommendRequest  # noqa: E402
-from web.backend.service import PitchRecommendationService  # noqa: E402
 
 
 # ============================================================
@@ -33,12 +34,30 @@ FRONTEND_PATH = PROJECT_ROOT / "web" / "frontend" / "index.html"
 # FastAPI app
 # ============================================================
 
-service = PitchRecommendationService(LSTM_ARTIFACT_PATH, OUTCOME_ARTIFACT_PATH)
+@asynccontextmanager
+async def lifespan(_app):
+    paths = (LSTM_ARTIFACT_PATH, OUTCOME_ARTIFACT_PATH)
+    missing_artifacts = [path.name for path in paths if not path.is_file()]
+    service = None
+    if not missing_artifacts:
+        from web.backend.service import PitchRecommendationService
+
+        service = PitchRecommendationService(*paths)
+    yield {"service": service, "missing_artifacts": missing_artifacts}
+
+
+def require_service(request: Request):
+    service = request.state.service
+    if service is None:
+        raise HTTPException(status_code=503, detail="서빙 모델 파일을 준비한 뒤 서버를 재시작하세요.")
+    return service
+
 
 app = FastAPI(
     title="Pitch Recommendation API",
     description="LSTM 기반 구종 후보 생성 + delta_run_exp 기반 zone 랭킹 추천 API",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -52,8 +71,19 @@ app.add_middleware(
 add_frontend_routes(app, FRONTEND_PATH)
 
 
-@app.get("/health")
-def health():
+@app.get("/live")
+def live():
+    return {"status": "ok"}
+
+
+@app.get("/health", responses={503: {"description": "서빙 모델 파일 준비 필요"}})
+def health(request: Request):
+    service = request.state.service
+    if service is None:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "missing_artifacts": request.state.missing_artifacts},
+        )
     return {
         "status": "ok",
         "device": str(service.device),
@@ -64,8 +94,9 @@ def health():
     }
 
 
-@app.get("/meta")
-def meta():
+@app.get("/meta", responses={503: {"description": "서빙 모델 파일 준비 필요"}})
+def meta(request: Request):
+    service = require_service(request)
     return {
         "valid_zones": service.valid_zones,
         "supported_pitch_types": service.supported_pitch_types,
@@ -92,11 +123,11 @@ def meta():
     }
 
 
-@app.post("/recommend")
-def recommend(req: RecommendRequest):
-    return service.recommend(req)
+@app.post("/recommend", responses={503: {"description": "서빙 모델 파일 준비 필요"}})
+def recommend(req: RecommendRequest, request: Request):
+    return require_service(request).recommend(req)
 
 
-@app.post("/compare")
-def compare(req: CompareRequest):
-    return service.compare(req)
+@app.post("/compare", responses={503: {"description": "서빙 모델 파일 준비 필요"}})
+def compare(req: CompareRequest, request: Request):
+    return require_service(request).compare(req)
