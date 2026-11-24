@@ -8,6 +8,7 @@ import torch
 
 from src.empirical_ranker import score_action
 from src.train_lstm import LSTMPitchModel
+from src.training_features import encode_numeric_features
 from .pitch_inputs import clean_pitch_token, encode_category, encode_pitch_history, normalize_zone
 from .schemas import CompareRequest, RecommendRequest, req_to_dict
 
@@ -140,20 +141,7 @@ class PitchRecommendationService:
             req.prev_pitch_types, req.prev_zones, self.pitch_vocab, self.zone_vocab,
         )
 
-        numeric_values = np.array(
-            [
-                req.balls,
-                req.strikes,
-                req.outs_when_up,
-                req.inning,
-                req.runner_1b,
-                req.runner_2b,
-                req.runner_3b,
-            ],
-            dtype=np.float32,
-        )
-
-        numeric_values = (numeric_values - self.scaler_mean) / self.scaler_scale
+        numeric_values = encode_numeric_features(req, self.scaler_mean, self.scaler_scale)
 
         pitcher_id = encode_category(req.pitcher, self.pitcher_vocab)
         stand_id = encode_category(req.stand.upper(), self.stand_vocab)

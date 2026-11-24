@@ -1,5 +1,6 @@
-"""Feature columns and vocabulary encoding shared by pitch classifiers."""
+"""Feature columns and input encoding for pitch classification and serving."""
 
+import numpy as np
 import pandas as pd
 
 
@@ -79,3 +80,9 @@ def encode_category(value, vocab, unk_token="UNK"):
         return vocab[unk_token]
 
     return vocab.get(str(value), vocab[unk_token])
+
+
+def encode_numeric_features(record, scaler_mean, scaler_scale):
+    """Apply the serving scaler in the same column order used during training."""
+    values = np.array([getattr(record, column) for column in NUMERIC_COLS], dtype=np.float32)
+    return (values - scaler_mean) / scaler_scale

@@ -1,5 +1,8 @@
 import unittest
 
+import numpy as np
+
+from src.training_features import encode_numeric_features
 from web.backend.pitch_inputs import (
     clean_pitch_token,
     encode_category,
@@ -7,6 +10,7 @@ from web.backend.pitch_inputs import (
     encode_sequence,
     normalize_zone,
 )
+from web.backend.schemas import RecommendRequest
 
 
 class PitchInputTests(unittest.TestCase):
@@ -49,3 +53,18 @@ class PitchInputTests(unittest.TestCase):
         del pitch_vocab["OTHER"]
         seq_pitch, seq_zone = encode_pitch_history(["OTHER", "SL"], ["Z1", "Z2"], pitch_vocab, zone_vocab)
         self.assertEqual(list(zip(seq_pitch, seq_zone)), [(0, 0), (0, 0), (0, 0), (1, 2), (3, 3)])
+
+    def test_serving_numeric_features_apply_training_order_and_float32_scaler(self):
+        mean = np.array([1, 0, 2, 3, 1, 0, 1], dtype=np.float32)
+        scale = np.array([2, 2, 1, 4, 2, 4, 8], dtype=np.float32)
+        scenarios = [
+            ({"runner_1b": 1}, [1, 1, -1, 1, 0, 0, -0.125]),
+            ({"runner_2b": 1}, [1, 1, -1, 1, -0.5, 0.25, -0.125]),
+            ({"runner_3b": 1}, [1, 1, -1, 1, -0.5, 0, 0]),
+        ]
+        for runners, expected in scenarios:
+            with self.subTest(runners=runners):
+                request = RecommendRequest(pitcher=123, balls=3, strikes=2, outs_when_up=1, inning=7, **runners)
+                numeric = encode_numeric_features(request, mean, scale)
+                self.assertEqual(numeric.dtype, np.float32)
+                np.testing.assert_array_equal(numeric, expected)

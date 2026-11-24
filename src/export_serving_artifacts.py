@@ -2,16 +2,17 @@ import pickle
 
 import numpy as np
 import pandas as pd
-import torch
 
 if __package__:
     from . import empirical_ranker as ranker
     from .game_split import split_indices
     from .run_paths import run_directory
+    from .training_features import NUMERIC_COLS
 else:
     import empirical_ranker as ranker
     from game_split import split_indices
     from run_paths import run_directory
+    from training_features import NUMERIC_COLS
 
 
 # =========================
@@ -27,17 +28,10 @@ OUTCOME_ARTIFACT_PATH = RUN_DIR / "models/outcome_ranker_artifact.pkl"
 
 SEQUENCE_PATH = RUN_DIR / "data/processed/sequence_data.csv"
 
-NUMERIC_COLS = [
-    "balls",
-    "strikes",
-    "outs_when_up",
-    "inning",
-    "runner_1b",
-    "runner_2b",
-    "runner_3b",
-]
 
 def safe_torch_load(path):
+    import torch
+
     try:
         return torch.load(path, map_location="cpu", weights_only=False)
     except TypeError:
@@ -93,6 +87,8 @@ def compute_scaler_from_sequence_data():
 
 
 def export_lstm_serving_artifact():
+    import torch
+
     if not LSTM_CHECKPOINT_PATH.exists():
         raise FileNotFoundError(f"파일이 없습니다: {LSTM_CHECKPOINT_PATH}")
 
