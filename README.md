@@ -205,6 +205,8 @@ export PITCH_GAME_SPLIT="$PITCH_RUN_DIR/data/processed/game_split.csv"
 
 LSTM과 Transformer는 검증·테스트의 정답 구종이 학습 클래스에 없는 행을 평가에서 제외합니다. 두 분할 모드 모두 구간별 제외 행 수와 전체 행 수를 출력하며, 평가 행이 한 건도 남지 않으면 학습을 시작하기 전에 오류를 표시합니다.
 
+같은 경기 분할에서 랭커용 희귀 구종 기준만 바꿔 실험하려면 별도 `PITCH_RUN_DIR`에 같은 원본 입력, 분할표, LSTM 예측 CSV와 체크포인트를 준비합니다. 같은 `PITCH_GAME_SPLIT`을 지정하고 `make_outcome_sequence.py`에 `--train-only-rare-pitches`를 추가한 뒤 랭커 평가와 서빙 파일 생성을 실행합니다. 이 옵션은 랭커를 적합하는 `train`·`validation` 경기의 필터 통과 투구만 집계합니다. 그 집계에서 500건 미만이거나 등장하지 않은 구종과 기존 강제 통합 구종은 `OTHER`가 됩니다.
+
 ### 웹 서버 실행
 
 선택한 실행 경로의 `models/`에 `lstm_serving_artifact.pt`와 `outcome_ranker_artifact.pkl`이 생성되면 서버를 실행합니다. 새 터미널에서 실행할 때는 수집·학습에 사용한 값을 다시 지정하세요.
