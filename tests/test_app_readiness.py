@@ -51,6 +51,7 @@ class AppReadinessTests(unittest.IsolatedAsyncioTestCase):
         service.valid_zones = ["Z5"]
         service.supported_pitch_types = service.global_top_pitches = ["FF"]
         service.stand_vocab = service.throws_vocab = {"R": 1}
+        service.compare.return_value = {"selected_action": {"pitch_type": "FF", "zone": "Z5"}}
 
         async with api.lifespan(api.app) as state:
             request = Request({"type": "http", "state": state})
@@ -68,6 +69,20 @@ class AppReadinessTests(unittest.IsolatedAsyncioTestCase):
         self.loader.assert_called_once_with(self.lstm, self.outcome)
         service.recommend.assert_called_once_with(recommendation)
         service.compare.assert_called_once_with(comparison)
+
+    async def test_invalid_comparison_returns_422_with_service_error_body(self):
+        body = {"error": "지원하지 않는 zone입니다.", "input_zone": "Z99", "valid_zones": ["Z5"]}
+        service = Mock()
+        service.compare.return_value = body
+        request = Request({"type": "http", "state": {"service": service}})
+        comparison = CompareRequest(
+            pitcher=123, balls=1, strikes=2, outs_when_up=1, inning=1, action_pitch_type="FF", action_zone="99",
+        )
+
+        response = api.compare(comparison, request)
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(json.loads(response.body), body)
 
     async def test_loader_errors_fail_startup(self):
         self.lstm.touch()

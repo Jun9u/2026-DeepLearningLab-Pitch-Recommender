@@ -128,6 +128,37 @@ def recommend(req: RecommendRequest, request: Request):
     return require_service(request).recommend(req)
 
 
-@app.post("/compare", responses={503: {"description": "서빙 모델 파일 준비 필요"}})
+@app.post(
+    "/compare",
+    responses={
+        422: {
+            "description": "요청 형식 오류 또는 지원하지 않는 구종·위치",
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "anyOf": [
+                            {"$ref": "#/components/schemas/HTTPValidationError"},
+                            {
+                                "type": "object",
+                                "required": ["error"],
+                                "properties": {
+                                    "error": {"type": "string"},
+                                    "input_pitch_type": {"type": "string"},
+                                    "supported_pitch_types": {"type": "array", "items": {"type": "string"}},
+                                    "input_zone": {"type": "string"},
+                                    "valid_zones": {"type": "array", "items": {"type": "string"}},
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        },
+        503: {"description": "서빙 모델 파일 준비 필요"},
+    },
+)
 def compare(req: CompareRequest, request: Request):
-    return require_service(request).compare(req)
+    result = require_service(request).compare(req)
+    if "error" in result:
+        return JSONResponse(status_code=422, content=result)
+    return result
