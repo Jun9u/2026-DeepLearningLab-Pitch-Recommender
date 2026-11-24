@@ -147,6 +147,8 @@ FastAPI 백엔드와 단일 HTML 프론트엔드로 구현한 **로컬 실행형
 | `POST /compare` | 사용자가 선택한 조합과 추천 점수 비교 |
 | `GET /docs` | FastAPI 자동 API 문서 |
 
+`/recommend`와 `/compare`에서 `prev_pitch_types`와 `prev_zones`의 같은 인덱스는 같은 투구를 가리킵니다. 오래된 투구부터 입력하고, 이력이 없으면 두 배열을 생략하거나 빈 배열로 보냅니다. 배열 길이가 다르면 HTTP `422`와 `pitch_history_length_mismatch`를 반환합니다.
+
 ## 6. 설치 및 실행
 
 **전제:** Python 3.12 기준으로 작성되었으며, 저장소 루트에서 명령어를 실행합니다. 데이터 수집·학습은 대용량 연산과 시간이 필요합니다.
