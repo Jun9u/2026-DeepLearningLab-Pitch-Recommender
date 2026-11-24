@@ -1,5 +1,7 @@
+import argparse
+from datetime import date
+
 import pandas as pd
-from pybaseball import statcast, cache
 
 if __package__:
     from .run_paths import run_directory
@@ -104,14 +106,18 @@ def print_col_status(cols, target_cols, title):
         print(f"{col}: {col in cols}")
 
 
-def main():
+def main(start_date=None, end_date=None):
+    from pybaseball import cache, statcast
+
+    start_date = START_DATE if start_date is None else start_date
+    end_date = END_DATE if end_date is None else end_date
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     
     cache.enable()
     print("===== Statcast 데이터 다운로드 =====")
-    print("기간:", START_DATE, "~", END_DATE)
+    print("기간:", start_date, "~", end_date)
 
-    df = statcast(START_DATE, END_DATE)
+    df = statcast(start_date, end_date)
 
     if "game_type" in df.columns:
         print("\n===== game_type 분포 =====")
@@ -185,5 +191,15 @@ def main():
     print(model_df["pitch_type"].value_counts(dropna=False).head(30))
 
 
+def cli(argv=None):
+    parser = argparse.ArgumentParser(description="Download regular-season Statcast pitches.")
+    parser.add_argument("--start-date", type=date.fromisoformat, default=START_DATE, metavar="YYYY-MM-DD")
+    parser.add_argument("--end-date", type=date.fromisoformat, default=END_DATE, metavar="YYYY-MM-DD")
+    args = parser.parse_args(argv)
+    if args.start_date > args.end_date:
+        parser.error("--start-date must be on or before --end-date")
+    main(args.start_date.isoformat(), args.end_date.isoformat())
+
+
 if __name__ == "__main__":
-    main()
+    cli()

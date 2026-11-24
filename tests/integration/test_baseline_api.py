@@ -84,10 +84,13 @@ from unittest.mock import patch
 import pandas as pd
 
 # Match the import path used when Python runs a script directly.
-sys.path.insert(0, str(Path(sys.argv[1]).parent))
-with patch("pybaseball.statcast", return_value=pd.read_csv("fixture.csv")):
-    runpy.run_path(sys.argv[1], run_name="__main__")
-""", str(REPO / "src/download_statcast.py"), run_directory=launch_dir)
+script = sys.argv.pop(1)
+sys.path.insert(0, str(Path(script).parent))
+with patch("pybaseball.statcast", return_value=pd.read_csv("fixture.csv")) as statcast:
+    runpy.run_path(script, run_name="__main__")
+    statcast.assert_called_once_with("2025-06-01", "2025-06-09")
+""", str(REPO / "src/download_statcast.py"), "--start-date", "2025-06-01", "--end-date", "2025-06-09",
+                    run_directory=launch_dir)
             for step in (
                 "check_csv", "check_data_summary", "preprocess", "make_sequence", "baseline",
                 "train_lstm", "train_transformer", "make_outcome_sequence",

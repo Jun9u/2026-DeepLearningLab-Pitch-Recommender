@@ -128,15 +128,19 @@ MLB Statcast의 투구 단위 데이터를 이용해 **다음 구종 후보를 �
 
 ## 5. 웹 데모
 
-FastAPI 백엔드와 단일 HTML 프론트엔드로 구현한 **로컬 실행형** 데모입니다. 현재 저장소에는 공개 배포 URL이나 즉시 실행 가능한 학습 모델 파일이 없습니다.
+FastAPI 백엔드와 HTML·CSS·JavaScript로 구현한 **로컬 실행형** 데모입니다. 현재 저장소에는 공개 배포 URL이나 즉시 실행 가능한 학습 모델 파일이 없습니다.
 
 **지원 기능**
 
-1. 투수 ID·투수/타자 좌우, 볼카운트, 아웃카운트, 주자·이닝 상황 입력
+1. 고정 예시 투수의 투수·타자 좌우, 볼카운트, 아웃카운트, 주자·이닝 상황 입력
 2. 이전 투구 구종 및 위치 입력, 구종 후보 수동 제한
 3. LSTM 구종 예측 Top-3와 후보 확률 확인
 4. 추천 구종·zone 및 근거 통계 조회
 5. 선택한 구종·zone 점수와 최상위 추천 점수 비교
+
+아래는 [2주치 Statcast 데모](#2주치-statcast로-데모-실행)에서 생성한 추천·비교 화면입니다.
+
+![2025년 6월 1~14일 Statcast 데모의 LSTM 구종 후보, 구종·위치 추천 및 직접 비교 결과](docs/images/statcast-demo.png)
 
 | 경로 | 기능 |
 | --- | --- |
@@ -152,17 +156,48 @@ FastAPI 백엔드와 단일 HTML 프론트엔드로 구현한 **로컬 실행형
 **전제:** Python 3.12 기준으로 작성되었으며, 저장소 루트에서 명령어를 실행합니다. 데이터 수집·학습은 대용량 연산과 시간이 필요합니다.
 
 ```bash
-python -m venv .venv
+python3.12 -m venv .venv
+source .venv/bin/activate
+```
+
+가상환경을 활성화한 뒤 프로젝트 의존성을 설치합니다.
+
+```bash
 python -m pip install -r requirements.txt
 ```
 
-가상환경을 사용한다면 운영체제에 맞게 활성화한 후 설치·실행하세요.
+위 예시는 Bash 기준입니다. Linux x86-64에서 CPU용 PyTorch로 설치하는 경우 의존성 설치 단계에서 아래 명령을 사용합니다.
+
+```bash
+torch_version=$(sed -n 's/^torch==//p' requirements.txt)
+python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==${torch_version}+cpu"
+python -m pip install -r requirements.txt
+```
 
 ### 실험 경로 선택
 
 `PITCH_RUN_DIR`에 실행 경로를 지정하면 수집, 학습, 평가와 웹 서버가 그 아래의 `data/`, `models/`, `results/`를 함께 사용합니다. 아래 예시는 저장소 루트에서 실행하며, 같은 실험의 명령과 서버에 동일한 값을 사용합니다. 경로를 생략하면 스크립트는 현재 작업 디렉터리, 웹 서버는 저장소 루트에서 데이터 또는 모델 파일을 찾습니다.
 
 새 실험 결과는 `results/`에 저장됩니다. `outputs/`는 공개 실험 요약을 보관합니다. 오프라인 랭커는 `results/lstm_weighted_macro_predictions.csv`를 우선 읽고, 파일이 없으면 같은 실행 경로의 기존 `outputs/lstm_weighted_macro_predictions.csv`를 읽습니다.
+
+### 2주치 Statcast로 데모 실행
+
+아래 명령은 2025년 6월 1~14일 정규시즌 투구를 Baseball Savant에서 받아 LSTM과 경험적 랭커의 서빙 파일을 생성합니다. 데이터 수집에 인터넷 연결이 필요합니다. 저장소 루트에서 가상환경을 활성화하고 실행합니다.
+
+```bash
+export PITCH_RUN_DIR="$PWD/runs/statcast-demo-2025-06"
+export PYBASEBALL_CACHE="$PITCH_RUN_DIR/.pybaseball-cache"
+
+python -u src/download_statcast.py --start-date 2025-06-01 --end-date 2025-06-14
+python -u src/preprocess.py
+python -u src/make_sequence.py
+python -u src/train_lstm.py
+python -u src/make_outcome_sequence.py
+python -u src/export_serving_artifacts.py
+python -m uvicorn web.backend.app:app --host 127.0.0.1 --port 8000
+```
+
+`http://127.0.0.1:8000`에서 **추천 받기**와 **직접 선택 비교**를 실행할 수 있습니다. 이 예시는 웹 데모를 확인하기 위한 2주 표본으로, 고정 예시 투수 ID는 해당 표본에서 미등록 투수로 처리됩니다. 아래 전체 실험 명령에서 날짜 옵션을 생략하면 기존 2023~2025 수집 범위를 사용합니다.
 
 ### 처음부터 재현하는 경우
 
@@ -235,6 +270,7 @@ uvicorn web.backend.app:app --reload --host 127.0.0.1 --port 8000
 ├── docs/
 │   ├── final_report.pdf
 │   ├── final_presentation.pdf
+│   ├── images/statcast-demo.png
 │   └── MAINTENANCE.md
 ├── outputs/
 │   ├── baseline_results.csv
