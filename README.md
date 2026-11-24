@@ -226,6 +226,20 @@ python -u src/export_serving_artifacts.py
 - `outcome_empirical_recommender.py`는 평가 결과 및 추천 결과를 생성합니다. **웹 서빙 파일 생성에는 `make_outcome_sequence.py`, `train_lstm.py` 실행 결과와 `export_serving_artifacts.py`가 필수**입니다.
 - 자동 통합 테스트는 합성 Statcast 응답으로 실행 경로, 학습, 서빙 파일 생성과 API 응답을 확인합니다. [테스트 실행 방법](tests/README.md)
 
+### 경기 단위 시간 분할 실험
+
+새 `PITCH_RUN_DIR`에 `data/raw/savant_data.csv`와 `data/raw/savant_data_with_outcome.csv`를 준비합니다. 같은 경기의 투구와 같은 날짜 경기가 서로 다른 분할에 들어가지 않도록, 경기 수 기준 70/10/20에 가까운 날짜 경계를 선택합니다. 날짜가 최소 3개 필요하며 생성한 분할 CSV를 실험 입력과 함께 보관합니다.
+
+```bash
+export PITCH_RUN_DIR="$PWD/runs/statcast-game-split"
+python -u src/game_split.py
+export PITCH_GAME_SPLIT="$PITCH_RUN_DIR/data/processed/game_split.csv"
+```
+
+이후 같은 터미널에서 위 파이프라인의 `preprocess.py`부터 실행합니다. 분류 시퀀스의 희귀 구종 기준과 LSTM·Transformer는 `train`을 사용하고, 두 모델은 `validation`으로 체크포인트를 고릅니다. 다수결과 랭커는 `train`과 `validation`을 합쳐 적합합니다. 평가는 모두 같은 `test` 경기 목록을 사용하며, 각 파이프라인의 기존 필터에 따라 투구 수는 달라질 수 있습니다. `PITCH_GAME_SPLIT`을 생략하면 기존 투구 행 단위 분할을 사용합니다.
+
+LSTM과 Transformer는 검증·테스트의 정답 구종이 학습 클래스에 없는 행을 평가에서 제외합니다. 두 분할 모드 모두 구간별 제외 행 수와 전체 행 수를 출력하며, 평가 행이 한 건도 남지 않으면 학습을 시작하기 전에 오류를 표시합니다.
+
 ### 웹 서버 실행
 
 선택한 실행 경로의 `models/`에 `lstm_serving_artifact.pt`와 `outcome_ranker_artifact.pkl`이 생성되면 서버를 실행합니다. 새 터미널에서 실행할 때는 수집·학습에 사용한 값을 다시 지정하세요.
