@@ -15,10 +15,12 @@ if __package__:
     from . import training_features as features
     from . import training_helpers as training
     from .run_paths import run_directory
+    from .game_split import split_indices
 else:
     import training_features as features
     import training_helpers as training
     from run_paths import run_directory
+    from game_split import split_indices
 
 
 # =========================
@@ -228,14 +230,10 @@ def main():
     if sort_cols:
         df = df.sort_values(sort_cols).reset_index(drop=True)
 
-    # LSTM과 동일한 70/10/20 time split
-    n = len(df)
-    train_end = int(n * 0.7)
-    valid_end = int(n * 0.8)
-
-    train_df = df.iloc[:train_end].copy()
-    valid_df = df.iloc[train_end:valid_end].copy()
-    test_df = df.iloc[valid_end:].copy()
+    train, valid, test = split_indices(df)
+    train_df = df.iloc[train].copy()
+    valid_df = df.iloc[valid].copy()
+    test_df = df.iloc[test].copy()
 
     print("===== 실행 환경 =====")
     print("experiment:", EXPERIMENT_NAME)
@@ -253,8 +251,8 @@ def main():
     target_to_idx = {label: idx for idx, label in enumerate(target_classes)}
     idx_to_target = {idx: label for label, idx in target_to_idx.items()}
 
-    valid_df = valid_df[valid_df[features.TARGET_COL].isin(target_to_idx)].copy()
-    test_df = test_df[test_df[features.TARGET_COL].isin(target_to_idx)].copy()
+    valid_df = features.filter_evaluation_targets(valid_df, target_classes, "Validation")
+    test_df = features.filter_evaluation_targets(test_df, target_classes, "Test")
 
     print("\n===== 클래스 목록 =====")
     print(target_classes)

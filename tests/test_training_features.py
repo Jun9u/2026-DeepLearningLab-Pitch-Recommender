@@ -1,10 +1,13 @@
 import pandas as pd
+import pytest
 
 from src.training_features import (
+    TARGET_COL,
     build_vocab_from_column,
     build_vocab_from_sequences,
     encode_category,
     encode_sequence,
+    filter_evaluation_targets,
 )
 
 
@@ -27,3 +30,22 @@ def test_encode_category_stringifies_ids_and_falls_back_to_unknown():
     assert encode_category(900001, vocab) == 2
     assert encode_category(900003, vocab) == 0
     assert encode_category(pd.NA, vocab) == 0
+
+
+def test_evaluation_reports_excluded_targets_and_keeps_supported_rows(capsys):
+    frame = pd.DataFrame({TARGET_COL: ["FF", "KC", "SL", pd.NA]}, index=[7, 2, 9, 5])
+
+    result = filter_evaluation_targets(frame, ["FF", "SL"], "Validation")
+
+    pd.testing.assert_frame_equal(result, frame.loc[[7, 9]])
+    assert "Validation: excluded 2 of 4 rows" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("partition", ["Validation", "Test"])
+def test_evaluation_stops_when_no_supported_targets_remain(partition, capsys):
+    frame = pd.DataFrame({TARGET_COL: ["KC"]})
+
+    with pytest.raises(ValueError, match=f"{partition}: no rows remain for evaluation"):
+        filter_evaluation_targets(frame, ["FF", "SL"], partition)
+
+    assert f"{partition}: excluded 1 of 1 rows" in capsys.readouterr().out
