@@ -250,17 +250,9 @@
       return "score-neutral";
     }
 
-    function riskText(value) {
-      if (value < -0.04) return "투수에게 매우 유리";
-      if (value < -0.01) return "투수에게 유리";
-      if (value < 0.02) return "중립";
-      return "공격팀에게 유리";
-    }
-
-    function confidenceLabel(count) {
-      if (count >= 1000) return "높음";
-      if (count >= 100) return "보통";
-      return "낮음";
+    function sourceCountLabel(item) {
+      if (item.source === "global" && item.source_count === 0) return "미제공";
+      return item.source_count.toLocaleString();
     }
 
     function sourceLabel(source) {
@@ -530,9 +522,9 @@
           <td>${idx + 1}</td>
           <td><span class="pitch-pill">${pitchLabel(item.pitch_type)}</span><span class="code-sub">${pitchEnglish(item.pitch_type)}</span></td>
           <td><b>${item.zone}</b></td>
-          <td class="${cls}">${item.pred_delta_run_exp.toFixed(5)}<br/><small>${riskText(item.pred_delta_run_exp)}</small></td>
+          <td class="${cls}">${item.pred_delta_run_exp.toFixed(5)}</td>
           <td>${sourceLabel(item.source)}</td>
-          <td>${item.source_count.toLocaleString()}<br/><small>신뢰도 ${confidenceLabel(item.source_count)}</small></td>
+          <td>${sourceCountLabel(item)}</td>
         `;
         tbody.appendChild(tr);
       });
@@ -547,23 +539,23 @@
       if (!best) { box.innerHTML = `<div class="mini-card">모델 추천 결과가 없습니다.</div>`; return; }
       const selectedCls = riskClass(selected.pred_delta_run_exp);
       const bestCls = riskClass(best.pred_delta_run_exp);
-      const message = cmp.is_selected_better_or_equal ? "직접 선택이 모델 추천과 같거나 더 유리합니다." : "현재 모델 기준으로는 모델 추천이 더 유리합니다.";
+      const message = cmp.is_selected_better_or_equal ? "직접 선택 점수가 추천 1위와 같거나 낮습니다." : "추천 1위의 점수가 더 낮습니다.";
       box.innerHTML = `
         <div class="mini-card">
           <h4>직접 선택</h4>
           <div><span class="pitch-pill">${pitchLabel(selected.pitch_type)}</span><span class="code-sub">${pitchEnglish(selected.pitch_type)}</span> / <b>${selected.zone}</b></div>
           <div class="mini-value ${selectedCls}">${selected.pred_delta_run_exp.toFixed(5)}</div>
-          <div style="color:#6b7280;font-size:12px;">${sourceLabel(selected.source)}, n=${selected.source_count.toLocaleString()}</div>
+          <div style="color:#6b7280;font-size:12px;">${sourceLabel(selected.source)} · 표본 수 ${sourceCountLabel(selected)}</div>
         </div>
         <div class="mini-card">
           <h4>모델 추천 1위</h4>
           <div><span class="pitch-pill">${pitchLabel(best.pitch_type)}</span><span class="code-sub">${pitchEnglish(best.pitch_type)}</span> / <b>${best.zone}</b></div>
           <div class="mini-value ${bestCls}">${best.pred_delta_run_exp.toFixed(5)}</div>
-          <div style="color:#6b7280;font-size:12px;">${sourceLabel(best.source)}, n=${best.source_count.toLocaleString()}</div>
+          <div style="color:#6b7280;font-size:12px;">${sourceLabel(best.source)} · 표본 수 ${sourceCountLabel(best)}</div>
         </div>
         <div class="mini-card" style="grid-column:1 / -1;">
-          <h4>비교 해석</h4>
-          <div>직접 선택 - 모델 추천 = <b class="${cmp.selected_minus_best <= 0 ? "score-good" : "score-bad"}">${cmp.selected_minus_best.toFixed(5)}</b></div>
+          <h4>모델 점수 비교</h4>
+          <div>직접 선택 점수 − 추천 1위 점수 = <b class="${cmp.selected_minus_best <= 0 ? "score-good" : "score-bad"}">${cmp.selected_minus_best.toFixed(5)}</b></div>
           <div style="margin-top:6px;color:#475569;">${message}</div>
         </div>
       `;
