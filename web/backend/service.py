@@ -8,13 +8,8 @@ import torch
 
 from src.empirical_ranker import score_action
 from src.train_lstm import LSTMPitchModel
-from .pitch_inputs import (
-    clean_pitch_token,
-    encode_category,
-    encode_numeric_features,
-    encode_pitch_history,
-    normalize_zone,
-)
+from src.training_features import encode_numeric_features
+from .pitch_inputs import clean_pitch_token, encode_category, encode_pitch_history, normalize_zone
 from .schemas import CompareRequest, RecommendRequest, req_to_dict
 
 

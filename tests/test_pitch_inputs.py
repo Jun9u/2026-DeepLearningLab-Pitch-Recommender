@@ -2,10 +2,10 @@ import unittest
 
 import numpy as np
 
+from src.training_features import encode_numeric_features
 from web.backend.pitch_inputs import (
     clean_pitch_token,
     encode_category,
-    encode_numeric_features,
     encode_pitch_history,
     encode_sequence,
     normalize_zone,

@@ -1,9 +1,6 @@
 """Normalize and encode pitch inputs for serving."""
 
-import numpy as np
-
 from src.sequence_helpers import left_pad
-from src.training_features import NUMERIC_COLS
 
 
 def normalize_zone(z):
@@ -61,9 +58,3 @@ def encode_pitch_history(prev_pitch_types, prev_zones, pitch_vocab, zone_vocab):
         encode_sequence(pitches, pitch_vocab),
         encode_sequence(zones, zone_vocab, pad_token="ZPAD", unk_token="ZUNK"),
     )
-
-
-def encode_numeric_features(request, scaler_mean, scaler_scale):
-    """Apply the serving scaler in the same column order used during training."""
-    values = np.array([getattr(request, column) for column in NUMERIC_COLS], dtype=np.float32)
-    return (values - scaler_mean) / scaler_scale
