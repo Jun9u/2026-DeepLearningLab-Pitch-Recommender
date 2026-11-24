@@ -1,4 +1,3 @@
-import random
 import time
 import platform
 
@@ -7,15 +6,19 @@ import pandas as pd
 
 import torch
 from torch import nn
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 
-from sklearn.metrics import accuracy_score, f1_score, classification_report
+from sklearn.metrics import classification_report
 from sklearn.preprocessing import StandardScaler
 
 if __package__:
+    from . import training_features as features
+    from . import training_helpers as training
     from .run_paths import run_directory
     from .game_split import split_indices
 else:
+    import training_features as features
+    import training_helpers as training
     from run_paths import run_directory
     from game_split import split_indices
 
@@ -34,25 +37,6 @@ RESULT_PATH = RUN_DIR / f"results/{EXPERIMENT_NAME}_result.csv"
 PRED_PATH = RUN_DIR / f"results/{EXPERIMENT_NAME}_predictions.csv"
 HISTORY_PATH = RUN_DIR / f"results/{EXPERIMENT_NAME}_training_log.csv"
 REPORT_PATH = RUN_DIR / f"results/{EXPERIMENT_NAME}_classification_report.csv"
-
-TARGET_COL = "target_pitch_type"
-
-SEQ_PITCH_COL = "seq_pitch_type"
-SEQ_ZONE_COL = "seq_zone"
-
-NUMERIC_COLS = [
-    "balls",
-    "strikes",
-    "outs_when_up",
-    "inning",
-    "runner_1b",
-    "runner_2b",
-    "runner_3b",
-]
-
-PITCHER_COL = "pitcher"
-STAND_COL = "stand"
-THROWS_COL = "p_throws"
 
 SEED = 42
 N_EPOCHS = 8
@@ -78,163 +62,7 @@ BEST_METRIC = "macro_f1"  # "accuracy", "top3_accuracy", "macro_f1", "weighted_f
 
 
 # =========================
-# 유틸 함수
-# =========================
-
-def set_seed(seed: int = 42):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-
-
-def format_time(seconds: float) -> str:
-    seconds = int(seconds)
-    h = seconds // 3600
-    m = (seconds % 3600) // 60
-    s = seconds % 60
-
-    if h > 0:
-        return f"{h}h {m}m {s}s"
-    if m > 0:
-        return f"{m}m {s}s"
-    return f"{s}s"
-
-
-def split_tokens(text):
-    if pd.isna(text):
-        return []
-    return str(text).split("|")
-
-
-def build_vocab_from_sequences(series, special_tokens):
-    vocab = {token: idx for idx, token in enumerate(special_tokens)}
-
-    for text in series.dropna():
-        for token in split_tokens(text):
-            if token not in vocab:
-                vocab[token] = len(vocab)
-
-    return vocab
-
-
-def build_vocab_from_column(series, special_tokens):
-    vocab = {token: idx for idx, token in enumerate(special_tokens)}
-
-    for value in series.dropna().astype(str):
-        if value not in vocab:
-            vocab[value] = len(vocab)
-
-    return vocab
-
-
-def encode_sequence(text, vocab, max_len=5, pad_token="PAD", unk_token="UNK"):
-    tokens = split_tokens(text)
-
-    if len(tokens) > max_len:
-        tokens = tokens[-max_len:]
-
-    if len(tokens) < max_len:
-        tokens = [pad_token] * (max_len - len(tokens)) + tokens
-
-    unk_id = vocab.get(unk_token, 1)
-
-    return [vocab.get(token, unk_id) for token in tokens]
-
-
-def encode_category(value, vocab, unk_token="UNK"):
-    if pd.isna(value):
-        return vocab[unk_token]
-
-    return vocab.get(str(value), vocab[unk_token])
-
-
-def topk_accuracy_score(y_true, y_topk):
-    correct = 0
-
-    for true_label, pred_list in zip(y_true, y_topk):
-        if true_label in pred_list:
-            correct += 1
-
-    return correct / len(y_true)
-
-
-def count_parameters(model):
-    return sum(p.numel() for p in model.parameters() if p.requires_grad)
-
-
-# =========================
-# Dataset
-# =========================
-
-class PitchSequenceDataset(Dataset):
-    def __init__(
-        self,
-        df,
-        pitch_vocab,
-        zone_vocab,
-        pitcher_vocab,
-        stand_vocab,
-        throws_vocab,
-        target_to_idx,
-        scaler,
-        max_len=5,
-    ):
-        self.df = df.reset_index(drop=True)
-
-        self.pitch_vocab = pitch_vocab
-        self.zone_vocab = zone_vocab
-        self.pitcher_vocab = pitcher_vocab
-        self.stand_vocab = stand_vocab
-        self.throws_vocab = throws_vocab
-        self.target_to_idx = target_to_idx
-        self.scaler = scaler
-        self.max_len = max_len
-
-        numeric_data = self.df[NUMERIC_COLS].astype(float).values
-        self.numeric = self.scaler.transform(numeric_data).astype(np.float32)
-
-    def __len__(self):
-        return len(self.df)
-
-    def __getitem__(self, idx):
-        row = self.df.iloc[idx]
-
-        seq_pitch = encode_sequence(
-            row[SEQ_PITCH_COL],
-            self.pitch_vocab,
-            max_len=self.max_len,
-            pad_token="PAD",
-            unk_token="UNK",
-        )
-
-        seq_zone = encode_sequence(
-            row[SEQ_ZONE_COL],
-            self.zone_vocab,
-            max_len=self.max_len,
-            pad_token="ZPAD",
-            unk_token="ZUNK",
-        )
-
-        pitcher = encode_category(row[PITCHER_COL], self.pitcher_vocab)
-        stand = encode_category(row[STAND_COL], self.stand_vocab)
-        p_throws = encode_category(row[THROWS_COL], self.throws_vocab)
-
-        label = self.target_to_idx[row[TARGET_COL]]
-
-        return {
-            "seq_pitch": torch.tensor(seq_pitch, dtype=torch.long),
-            "seq_zone": torch.tensor(seq_zone, dtype=torch.long),
-            "numeric": torch.tensor(self.numeric[idx], dtype=torch.float32),
-            "pitcher": torch.tensor(pitcher, dtype=torch.long),
-            "stand": torch.tensor(stand, dtype=torch.long),
-            "p_throws": torch.tensor(p_throws, dtype=torch.long),
-            "label": torch.tensor(label, dtype=torch.long),
-        }
-
-
-# =========================
-# Transformer Model
+# Model
 # =========================
 
 class TransformerPitchModel(nn.Module):
@@ -367,128 +195,13 @@ class TransformerPitchModel(nn.Module):
 
 
 # =========================
-# 학습 / 평가 함수
-# =========================
-
-def train_one_epoch(model, loader, criterion, optimizer, device):
-    model.train()
-
-    total_loss = 0.0
-    total_count = 0
-
-    for batch in loader:
-        seq_pitch = batch["seq_pitch"].to(device)
-        seq_zone = batch["seq_zone"].to(device)
-        numeric = batch["numeric"].to(device)
-        pitcher = batch["pitcher"].to(device)
-        stand = batch["stand"].to(device)
-        p_throws = batch["p_throws"].to(device)
-        labels = batch["label"].to(device)
-
-        optimizer.zero_grad()
-
-        logits = model(
-            seq_pitch=seq_pitch,
-            seq_zone=seq_zone,
-            numeric=numeric,
-            pitcher=pitcher,
-            stand=stand,
-            p_throws=p_throws,
-        )
-
-        loss = criterion(logits, labels)
-        loss.backward()
-
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-
-        optimizer.step()
-
-        batch_size = labels.size(0)
-        total_loss += loss.item() * batch_size
-        total_count += batch_size
-
-    return total_loss / total_count
-
-
-def evaluate(model, loader, criterion, device, idx_to_target, return_predictions=False):
-    model.eval()
-
-    total_loss = 0.0
-    total_count = 0
-
-    y_true = []
-    y_pred = []
-    y_top3 = []
-
-    with torch.no_grad():
-        for batch in loader:
-            seq_pitch = batch["seq_pitch"].to(device)
-            seq_zone = batch["seq_zone"].to(device)
-            numeric = batch["numeric"].to(device)
-            pitcher = batch["pitcher"].to(device)
-            stand = batch["stand"].to(device)
-            p_throws = batch["p_throws"].to(device)
-            labels = batch["label"].to(device)
-
-            logits = model(
-                seq_pitch=seq_pitch,
-                seq_zone=seq_zone,
-                numeric=numeric,
-                pitcher=pitcher,
-                stand=stand,
-                p_throws=p_throws,
-            )
-
-            loss = criterion(logits, labels)
-
-            batch_size = labels.size(0)
-            total_loss += loss.item() * batch_size
-            total_count += batch_size
-
-            pred = torch.argmax(logits, dim=1)
-
-            k = min(3, logits.size(1))
-            top3 = torch.topk(logits, k=k, dim=1).indices
-
-            y_true.extend(labels.cpu().numpy().tolist())
-            y_pred.extend(pred.cpu().numpy().tolist())
-            y_top3.extend(top3.cpu().numpy().tolist())
-
-    avg_loss = total_loss / total_count
-    acc = accuracy_score(y_true, y_pred)
-    top3_acc = topk_accuracy_score(y_true, y_top3)
-    macro_f1 = f1_score(y_true, y_pred, average="macro", zero_division=0)
-    weighted_f1 = f1_score(y_true, y_pred, average="weighted", zero_division=0)
-
-    metrics = {
-        "loss": avg_loss,
-        "accuracy": acc,
-        "top3_accuracy": top3_acc,
-        "macro_f1": macro_f1,
-        "weighted_f1": weighted_f1,
-    }
-
-    if not return_predictions:
-        return metrics
-
-    pred_names = [idx_to_target[i] for i in y_pred]
-    true_names = [idx_to_target[i] for i in y_true]
-    top3_names = [
-        [idx_to_target[i] for i in pred_list]
-        for pred_list in y_top3
-    ]
-
-    return metrics, true_names, pred_names, top3_names
-
-
-# =========================
 # main
 # =========================
 
 def main():
     total_start_time = time.perf_counter()
 
-    set_seed(SEED)
+    training.set_seed(SEED)
 
     if not DATA_PATH.exists():
         raise FileNotFoundError(f"파일이 없습니다: {DATA_PATH}")
@@ -496,13 +209,13 @@ def main():
     df = pd.read_csv(DATA_PATH)
 
     required_cols = [
-        SEQ_PITCH_COL,
-        SEQ_ZONE_COL,
-        TARGET_COL,
-        PITCHER_COL,
-        STAND_COL,
-        THROWS_COL,
-    ] + NUMERIC_COLS
+        features.SEQ_PITCH_COL,
+        features.SEQ_ZONE_COL,
+        features.TARGET_COL,
+        features.PITCHER_COL,
+        features.STAND_COL,
+        features.THROWS_COL,
+    ] + features.NUMERIC_COLS
 
     missing = [c for c in required_cols if c not in df.columns]
 
@@ -534,48 +247,48 @@ def main():
     print("Valid:", valid_df.shape)
     print("Test :", test_df.shape)
 
-    target_classes = sorted(train_df[TARGET_COL].dropna().unique().tolist())
+    target_classes = sorted(train_df[features.TARGET_COL].dropna().unique().tolist())
     target_to_idx = {label: idx for idx, label in enumerate(target_classes)}
     idx_to_target = {idx: label for label, idx in target_to_idx.items()}
 
-    valid_df = valid_df[valid_df[TARGET_COL].isin(target_to_idx)].copy()
-    test_df = test_df[test_df[TARGET_COL].isin(target_to_idx)].copy()
+    valid_df = valid_df[valid_df[features.TARGET_COL].isin(target_to_idx)].copy()
+    test_df = test_df[test_df[features.TARGET_COL].isin(target_to_idx)].copy()
 
     print("\n===== 클래스 목록 =====")
     print(target_classes)
     print("클래스 수:", len(target_classes))
 
     print("\n===== Train target 분포 =====")
-    print(train_df[TARGET_COL].value_counts())
+    print(train_df[features.TARGET_COL].value_counts())
 
     print("\n===== Valid target 분포 =====")
-    print(valid_df[TARGET_COL].value_counts())
+    print(valid_df[features.TARGET_COL].value_counts())
 
     print("\n===== Test target 분포 =====")
-    print(test_df[TARGET_COL].value_counts())
+    print(test_df[features.TARGET_COL].value_counts())
 
-    pitch_vocab = build_vocab_from_sequences(
-        train_df[SEQ_PITCH_COL],
+    pitch_vocab = features.build_vocab_from_sequences(
+        train_df[features.SEQ_PITCH_COL],
         special_tokens=["PAD", "UNK"],
     )
 
-    zone_vocab = build_vocab_from_sequences(
-        train_df[SEQ_ZONE_COL],
+    zone_vocab = features.build_vocab_from_sequences(
+        train_df[features.SEQ_ZONE_COL],
         special_tokens=["ZPAD", "ZUNK"],
     )
 
-    pitcher_vocab = build_vocab_from_column(
-        train_df[PITCHER_COL],
+    pitcher_vocab = features.build_vocab_from_column(
+        train_df[features.PITCHER_COL],
         special_tokens=["UNK"],
     )
 
-    stand_vocab = build_vocab_from_column(
-        train_df[STAND_COL],
+    stand_vocab = features.build_vocab_from_column(
+        train_df[features.STAND_COL],
         special_tokens=["UNK"],
     )
 
-    throws_vocab = build_vocab_from_column(
-        train_df[THROWS_COL],
+    throws_vocab = features.build_vocab_from_column(
+        train_df[features.THROWS_COL],
         special_tokens=["UNK"],
     )
 
@@ -587,9 +300,9 @@ def main():
     print("throws_vocab :", len(throws_vocab))
 
     scaler = StandardScaler()
-    scaler.fit(train_df[NUMERIC_COLS].astype(float).values)
+    scaler.fit(train_df[features.NUMERIC_COLS].astype(float).values)
 
-    train_dataset = PitchSequenceDataset(
+    train_dataset = training.PitchSequenceDataset(
         train_df,
         pitch_vocab,
         zone_vocab,
@@ -601,7 +314,7 @@ def main():
         max_len=MAX_LEN,
     )
 
-    valid_dataset = PitchSequenceDataset(
+    valid_dataset = training.PitchSequenceDataset(
         valid_df,
         pitch_vocab,
         zone_vocab,
@@ -613,7 +326,7 @@ def main():
         max_len=MAX_LEN,
     )
 
-    test_dataset = PitchSequenceDataset(
+    test_dataset = training.PitchSequenceDataset(
         test_df,
         pitch_vocab,
         zone_vocab,
@@ -658,16 +371,16 @@ def main():
         num_pitchers=len(pitcher_vocab),
         num_stands=len(stand_vocab),
         num_throws=len(throws_vocab),
-        num_numeric_features=len(NUMERIC_COLS),
+        num_numeric_features=len(features.NUMERIC_COLS),
         num_classes=len(target_classes),
         pitch_pad_idx=pitch_vocab["PAD"],
     ).to(device)
 
     print("\n===== 모델 정보 =====")
-    print("trainable parameters:", count_parameters(model))
+    print("trainable parameters:", training.count_parameters(model))
 
     if USE_CLASS_WEIGHTS:
-        train_label_idx = train_df[TARGET_COL].map(target_to_idx)
+        train_label_idx = train_df[features.TARGET_COL].map(target_to_idx)
         counts = train_label_idx.value_counts().sort_index()
 
         weights = []
@@ -708,7 +421,7 @@ def main():
     for epoch in range(1, N_EPOCHS + 1):
         epoch_start_time = time.perf_counter()
 
-        train_loss = train_one_epoch(
+        train_loss = training.train_one_epoch(
             model=model,
             loader=train_loader,
             criterion=criterion,
@@ -716,7 +429,7 @@ def main():
             device=device,
         )
 
-        valid_metrics = evaluate(
+        valid_metrics = training.evaluate(
             model=model,
             loader=valid_loader,
             criterion=criterion,
@@ -754,9 +467,9 @@ def main():
             f"valid_top3={valid_metrics['top3_accuracy']:.4f} | "
             f"valid_macro_f1={valid_metrics['macro_f1']:.4f} | "
             f"valid_weighted_f1={valid_metrics['weighted_f1']:.4f} | "
-            f"epoch_time={format_time(epoch_time)} | "
-            f"elapsed={format_time(elapsed_time)} | "
-            f"eta={format_time(eta_time)}"
+            f"epoch_time={training.format_time(epoch_time)} | "
+            f"elapsed={training.format_time(elapsed_time)} | "
+            f"eta={training.format_time(eta_time)}"
         )
 
         if score > best_score:
@@ -773,7 +486,7 @@ def main():
                     "pitcher_vocab": pitcher_vocab,
                     "stand_vocab": stand_vocab,
                     "throws_vocab": throws_vocab,
-                    "numeric_cols": NUMERIC_COLS,
+                    "numeric_cols": features.NUMERIC_COLS,
                     "scaler_mean": scaler.mean_.astype(float).tolist(),
                     "scaler_scale": scaler.scale_.astype(float).tolist(),
                     "best_metric": BEST_METRIC,
@@ -805,7 +518,7 @@ def main():
     checkpoint = torch.load(MODEL_PATH, map_location=device, weights_only=False)
     model.load_state_dict(checkpoint["model_state_dict"])
 
-    test_metrics, true_names, pred_names, top3_names = evaluate(
+    test_metrics, true_names, pred_names, top3_names = training.evaluate(
         model=model,
         loader=test_loader,
         criterion=criterion,
@@ -821,7 +534,7 @@ def main():
         print(f"{k}: {v:.6f}")
 
     print("\n===== 실행 시간 =====")
-    print("전체 실행 시간:", format_time(total_time))
+    print("전체 실행 시간:", training.format_time(total_time))
     print("전체 실행 시간_sec:", round(total_time, 2))
 
     RESULT_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -840,7 +553,7 @@ def main():
                 "batch_size": BATCH_SIZE,
                 "learning_rate": LEARNING_RATE,
                 "total_time_sec": round(total_time, 4),
-                "trainable_parameters": count_parameters(model),
+                "trainable_parameters": training.count_parameters(model),
                 **test_metrics,
             }
         ]
@@ -873,4 +586,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    

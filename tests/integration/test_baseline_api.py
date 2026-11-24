@@ -201,6 +201,20 @@ with patch("pybaseball.statcast", return_value=pd.read_csv("fixture.csv")):
         self.assertEqual(status, 200)
         self.assertEqual(invalid_zone["error"], "지원하지 않는 zone입니다.")
         self.assertEqual(invalid_zone["input_zone"], "Z99")
+        status, nonfinite_zone = request(
+            base, "/compare", {**REQUEST, "action_pitch_type": "FF", "action_zone": "Infinity"},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(nonfinite_zone["error"], invalid_zone["error"])
+        self.assertEqual(nonfinite_zone["input_zone"], "ZUNK")
+
+        status, nonfinite_history = request(base, "/recommend", {**REQUEST, "prev_zones": ["Infinity"]})
+        self.assertEqual(status, 200)
+        status, unknown_history = request(base, "/recommend", {**REQUEST, "prev_zones": ["ZUNK"]})
+        self.assertEqual(status, 200)
+        self.assertEqual(nonfinite_history["lstm_top3"], unknown_history["lstm_top3"])
+        self.assertEqual(nonfinite_history["recommendations"], unknown_history["recommendations"])
+
         status, missing_action = request(base, "/compare", {**REQUEST, "action_pitch_type": "FF"})
         self.assertEqual(status, 422)
         self.assertEqual(missing_action["detail"][0]["loc"], ["body", "action_zone"])
