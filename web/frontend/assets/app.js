@@ -303,21 +303,30 @@
       return "볼";
     }
 
-    function renderZoneBoard() {
+    function renderZoneBoard(focusZone) {
       const board = document.getElementById("zoneBoard");
+      const previousFocus = board.contains(document.activeElement) ? document.activeElement.dataset.zone : null;
+      const zoneToFocus = focusZone ?? previousFocus;
+      const activeZone = getActiveZone();
+      let nextFocus;
       board.innerHTML = "";
       Object.entries(ZONE_LAYOUT_PITCHER_VIEW).forEach(([zone, cfg]) => {
-        const div = document.createElement("div");
-        div.className = [zoneCellClass(zone), cfg.type, cfg.corner || ""].join(" ").trim();
-        div.style.left = `${cfg.left}%`;
-        div.style.top = `${cfg.top}%`;
-        div.style.width = `${cfg.width}%`;
-        div.style.height = `${cfg.height}%`;
-        div.onclick = () => selectZone(zone);
-        div.innerHTML = `<div class="zone-label">${zone}</div><div class="zone-sub">${zoneSubLabel(zone)}</div>`;
-        board.appendChild(div);
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.zone = zone;
+        button.setAttribute("aria-pressed", String(zone === activeZone));
+        button.className = [zoneCellClass(zone), cfg.type, cfg.corner || ""].join(" ").trim();
+        button.style.left = `${cfg.left}%`;
+        button.style.top = `${cfg.top}%`;
+        button.style.width = `${cfg.width}%`;
+        button.style.height = `${cfg.height}%`;
+        button.onclick = () => selectZone(zone);
+        button.innerHTML = `<span class="zone-label">${zone}</span><span class="zone-sub">${zoneSubLabel(zone)}</span>`;
+        board.appendChild(button);
+        if (zone === zoneToFocus) nextFocus = button;
       });
       updateActiveTargetText();
+      nextFocus?.focus({ preventScroll: focusZone == null });
     }
 
     function updateActiveTargetText() {
@@ -343,19 +352,19 @@
       renderZoneBoard();
     }
 
-    function setActivePrev(index) {
+    function setActivePrev(index, moveFocus) {
       if (prevRows[index].pitch === "NONE") {
         showMessage("이전 투구 없음으로 설정된 항목은 위치를 선택할 필요가 없습니다.", "error");
         return;
       }
       activeTarget = { type: "prev", index };
-      renderZoneBoard();
+      renderZoneBoard(moveFocus ? getActiveZone() : undefined);
       renderPrevRows();
     }
 
-    function setActiveCompare() {
+    function setActiveCompare(moveFocus) {
       activeTarget = { type: "compare" };
-      renderZoneBoard();
+      renderZoneBoard(moveFocus ? getActiveZone() : undefined);
     }
 
     function renderPrevRows() {
@@ -370,7 +379,7 @@
           <div class="idx">${PREV_LABELS[idx]}</div>
           <select onchange="updatePrevPitch(${idx}, this.value)">${makePitchOptions(row.pitch, true)}</select>
           <div class="zone-chip">${isNone ? "-" : row.zone}</div>
-          <button class="${isActive ? "btn-primary" : "btn-ghost"}" onclick="setActivePrev(${idx})" ${isNone ? "disabled" : ""}>위치 선택</button>
+          <button class="${isActive ? "btn-primary" : "btn-ghost"}" onclick="setActivePrev(${idx}, event.detail === 0)" ${isNone ? "disabled" : ""}>위치 선택</button>
         `;
         container.appendChild(div);
       });
