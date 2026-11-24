@@ -23,6 +23,16 @@ STAND_COL = "stand"
 THROWS_COL = "p_throws"
 
 
+def filter_evaluation_targets(frame, target_classes, partition):
+    """Keep evaluation targets represented by the trained classifier."""
+    supported = frame[TARGET_COL].isin(target_classes)
+    excluded = int((~supported).sum())
+    print(f"{partition}: excluded {excluded} of {len(frame)} rows with targets absent from training")
+    if not supported.any():
+        raise ValueError(f"{partition}: no rows remain for evaluation with the training classes")
+    return frame.loc[supported].copy()
+
+
 def split_tokens(text):
     if pd.isna(text):
         return []

@@ -251,8 +251,8 @@ def main():
     target_to_idx = {label: idx for idx, label in enumerate(target_classes)}
     idx_to_target = {idx: label for label, idx in target_to_idx.items()}
 
-    valid_df = valid_df[valid_df[features.TARGET_COL].isin(target_to_idx)].copy()
-    test_df = test_df[test_df[features.TARGET_COL].isin(target_to_idx)].copy()
+    valid_df = features.filter_evaluation_targets(valid_df, target_classes, "Validation")
+    test_df = features.filter_evaluation_targets(test_df, target_classes, "Test")
 
     print("\n===== 클래스 목록 =====")
     print(target_classes)
