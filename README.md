@@ -189,6 +189,7 @@ python -u src/export_serving_artifacts.py
 
 - `train_transformer.py`는 **비교 실험용**이므로 LSTM 기반 웹 데모 구동에 필수는 아닙니다.
 - `outcome_empirical_recommender.py`는 평가 결과 및 추천 결과를 생성합니다. **웹 서빙 파일 생성에는 `make_outcome_sequence.py`, `train_lstm.py` 실행 결과와 `export_serving_artifacts.py`가 필수**입니다.
+- 랭커 평가에 `--diagnostics`를 추가하면 `results/outcome_empirical_diagnostics.json`을 생성합니다. 같은 테스트 투구의 관측 결과에 대해 랭커와 학습 구간 평균의 MAE·RMSE·R²를 비교하고, LSTM Top-3 값이 결합된 행 수와 실제 투구 점수에 적용된 통계 단계별 건수를 기록합니다.
 - 자동 통합 테스트는 합성 Statcast 응답으로 실행 경로, 학습, 서빙 파일 생성과 API 응답을 확인합니다. [테스트 실행 방법](tests/README.md)
 
 ### 경기 단위 시간 분할 실험

@@ -1,3 +1,6 @@
+import argparse
+from collections import Counter
+import json
 import math
 import pandas as pd
 import numpy as np
@@ -24,6 +27,7 @@ LSTM_PRED_PATH = RUN_DIR / "results/lstm_weighted_macro_predictions.csv"
 
 EVAL_OUTPUT_PATH = RUN_DIR / "results/outcome_empirical_eval.csv"
 RECOMMEND_OUTPUT_PATH = RUN_DIR / "results/outcome_empirical_recommendations.csv"
+DIAGNOSTICS_OUTPUT_PATH = RUN_DIR / "results/outcome_empirical_diagnostics.json"
 
 TOP_N_RECOMMENDATIONS = 5
 
@@ -81,7 +85,40 @@ def parse_top3(text):
     return values
 
 
-def main():
+def regression_metrics(y_true, y_pred):
+    return {
+        "mae": mean_absolute_error(y_true, y_pred),
+        "rmse": math.sqrt(mean_squared_error(y_true, y_pred)),
+        "r2": r2_score(y_true, y_pred),
+    }
+
+
+def write_diagnostics(y_true, ranker_metrics, *, train_count, global_mean, lstm_top3, actual_sources):
+    baseline_metrics = regression_metrics(y_true, np.full(len(y_true), global_mean, dtype=float))
+    matched = int(lstm_top3.notna().sum())
+    report = {
+        "target": ranker.TARGET_COL,
+        "train_rows": train_count,
+        "test_rows": len(y_true),
+        "train_global_mean": float(global_mean),
+        "observed_action_metrics": {
+            name: {metric: float(value) if math.isfinite(value) else None for metric, value in metrics.items()}
+            for name, metrics in (("empirical_ranker", ranker_metrics), ("train_global_mean", baseline_metrics))
+        },
+        "lstm_top3_join": {
+            "matched_rows": matched,
+            "missing_rows": len(y_true) - matched,
+            "match_rate": matched / len(y_true),
+        },
+        "observed_action_source_counts": dict(Counter(actual_sources)),
+    }
+    DIAGNOSTICS_OUTPUT_PATH.write_text(
+        json.dumps(report, indent=2, allow_nan=False) + "\n", encoding="utf-8",
+    )
+    print("진단 저장:", DIAGNOSTICS_OUTPUT_PATH)
+
+
+def main(*, diagnostics=False):
     if not DATA_PATH.exists():
         raise FileNotFoundError(f"파일이 없습니다: {DATA_PATH}")
 
@@ -165,18 +202,14 @@ def main():
     y_true = test_df[ranker.TARGET_COL].astype(float).values
     y_pred = np.array(actual_pred)
 
-    mae = mean_absolute_error(y_true, y_pred)
-    rmse = math.sqrt(mean_squared_error(y_true, y_pred))
-    r2 = r2_score(y_true, y_pred)
+    metrics = regression_metrics(y_true, y_pred)
 
     eval_df = pd.DataFrame(
         [
             {
                 "model": "Empirical Outcome Ranker",
                 "target": "delta_run_exp",
-                "mae": mae,
-                "rmse": rmse,
-                "r2": r2,
+                **metrics,
                 "global_mean": global_mean,
                 "test_rows": len(test_df),
             }
@@ -318,6 +351,11 @@ def main():
 
     rec_df = pd.DataFrame(recommendation_rows)
     rec_df.to_csv(RECOMMEND_OUTPUT_PATH, index=False, encoding="utf-8-sig")
+    if diagnostics:
+        write_diagnostics(
+            y_true, metrics, train_count=train_count, global_mean=global_mean,
+            lstm_top3=test_df["top3_pitch_type"], actual_sources=actual_sources,
+        )
 
     print("\n===== 추천 결과 샘플 =====")
     show_cols = [
@@ -341,4 +379,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--diagnostics", action="store_true",
+        help="Write the observed-action ranker and training-mean comparison with the LSTM join rate.",
+    )
+    main(diagnostics=parser.parse_args().diagnostics)
