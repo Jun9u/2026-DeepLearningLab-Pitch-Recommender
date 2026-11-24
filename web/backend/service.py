@@ -307,11 +307,6 @@ class PitchRecommendationService:
                 "이전 투구 정보가 없습니다. 현재 모델은 이전 투구 이력이 있는 상황에서 더 안정적으로 동작합니다."
             )
 
-        if len(req.prev_pitch_types) != len(req.prev_zones):
-            warning_messages.append(
-                "prev_pitch_types와 prev_zones의 길이가 다릅니다. 부족한 부분은 PAD/ZUNK로 처리됩니다."
-            )
-
         return {
             "input": req_to_dict(req),
             "warnings": warning_messages,

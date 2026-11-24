@@ -200,9 +200,24 @@ with patch("pybaseball.statcast", return_value=pd.read_csv("fixture.csv")) as st
 
         _, manual = request(base, "/recommend", {**REQUEST, "candidate_pitch_types": [" ch ", "X", "CH"]})
         self.assertEqual(manual["candidate_pitches"], ["CH"])
-        _, fallback = request(base, "/recommend", {**REQUEST, "candidate_pitch_types": ["X"], "prev_zones": []})
+        status, fallback = request(base, "/recommend", {
+            **REQUEST, "candidate_pitch_types": ["X"], "prev_pitch_types": [], "prev_zones": [],
+        })
+        self.assertEqual(status, 200)
         self.assertTrue(fallback["recommendations"])
-        self.assertIn("prev_pitch_types", fallback["warnings"][0])
+        self.assertIn("이전 투구 정보가 없습니다", fallback["warnings"][0])
+        mismatched = {**REQUEST, "prev_zones": []}
+        for path, payload in (
+            ("/recommend", mismatched),
+            ("/compare", {**mismatched, "action_pitch_type": "FF", "action_zone": "Z5"}),
+        ):
+            with self.subTest(path=path):
+                status, error = request(base, path, payload)
+                self.assertEqual(status, 422)
+                detail = error["detail"][0]
+                self.assertEqual(detail["type"], "pitch_history_length_mismatch")
+                self.assertEqual(detail["loc"], ["body"])
+                self.assertIn("같은 개수", detail["msg"])
         status, invalid = request(base, "/compare", {**REQUEST, "action_pitch_type": "X", "action_zone": "Z5"})
         self.assertEqual(status, 200)
         self.assertIn("error", invalid)

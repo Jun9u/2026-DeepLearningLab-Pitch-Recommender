@@ -1,8 +1,9 @@
 """Request models shared by the HTTP routes and recommendation service."""
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Self
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+from pydantic_core import PydanticCustomError
 
 
 class RecommendRequest(BaseModel):
@@ -36,6 +37,15 @@ class RecommendRequest(BaseModel):
     # 최종 추천 개수
     top_n: int = Field(default=5, ge=1, le=20)
 
+    @model_validator(mode="after")
+    def validate_pitch_history(self) -> Self:
+        if len(self.prev_pitch_types) != len(self.prev_zones):
+            raise PydanticCustomError(
+                "pitch_history_length_mismatch",
+                "이전 투구의 구종과 위치는 같은 개수로 입력해 주세요.",
+            )
+        return self
+
 
 class CompareRequest(RecommendRequest):
     action_pitch_type: str
@@ -43,9 +53,7 @@ class CompareRequest(RecommendRequest):
 
 
 def req_to_dict(req: RecommendRequest) -> Dict[str, Any]:
-    """
-    Pydantic v1/v2 호환용.
-    """
+    """요청 모델을 응답에 포함할 딕셔너리로 변환합니다."""
     if hasattr(req, "model_dump"):
         return req.model_dump()
     return req.dict()

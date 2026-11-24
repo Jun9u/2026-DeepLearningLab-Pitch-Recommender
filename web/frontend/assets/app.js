@@ -175,6 +175,10 @@
 
       if (Array.isArray(data.detail)) {
         return data.detail.map(err => {
+          if (err.type === "pitch_history_length_mismatch" && typeof err.msg === "string") {
+            return err.msg;
+          }
+
           const field = Array.isArray(err.loc) ? err.loc[err.loc.length - 1] : "";
           const label = FIELD_LABELS[field] || field || "입력값";
           const ctx = err.ctx || {};
