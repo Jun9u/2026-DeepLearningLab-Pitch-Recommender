@@ -9,9 +9,11 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 if __package__:
     from . import empirical_ranker as ranker
+    from .game_split import split_indices
     from .run_paths import run_directory
 else:
     import empirical_ranker as ranker
+    from game_split import split_indices
     from run_paths import run_directory
 
 
@@ -130,11 +132,9 @@ def main(*, diagnostics=False):
     if sort_cols:
         df = df.sort_values(sort_cols).reset_index(drop=True)
 
-    # LSTM의 test 구간과 맞추기 위해 80/20 분할
-    split_idx = int(len(df) * 0.8)
-
-    train_df = df.iloc[:split_idx].copy()
-    test_df = df.iloc[split_idx:].copy()
+    train, _, test = split_indices(df, with_validation=False)
+    train_df = df.iloc[train].copy()
+    test_df = df.iloc[test].copy()
 
     print("===== 데이터 분할 =====")
     print("전체:", df.shape)

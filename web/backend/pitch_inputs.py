@@ -20,7 +20,7 @@ def normalize_zone(z):
 
     try:
         return f"Z{int(float(z))}"
-    except ValueError:
+    except (ValueError, OverflowError):
         return "ZUNK"
 
 
@@ -37,13 +37,24 @@ def encode_category(value, vocab, unk_token="UNK"):
     return vocab.get(str(value), vocab.get(unk_token, 0))
 
 
-def clean_pitch_token(p):
+def clean_pitch_token(p, *, keep_other=False):
     if p is None:
         return None
 
     p = str(p).strip().upper()
 
-    if p in ["", "NAN", "NONE", "OTHER"]:
+    if p in ["", "NAN", "NONE"] or (p == "OTHER" and not keep_other):
         return None
 
     return p
+
+
+def encode_pitch_history(prev_pitch_types, prev_zones, pitch_vocab, zone_vocab):
+    """Keep one token per history entry so paired pitches and zones stay aligned."""
+    pitches = [clean_pitch_token(pitch, keep_other=True) or "UNK" for pitch in prev_pitch_types]
+    zones = [normalize_zone(zone) for zone in prev_zones]
+
+    return (
+        encode_sequence(pitches, pitch_vocab),
+        encode_sequence(zones, zone_vocab, pad_token="ZPAD", unk_token="ZUNK"),
+    )
