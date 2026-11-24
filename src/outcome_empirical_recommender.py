@@ -141,9 +141,9 @@ def main():
 
     train_count = len(train_df)
 
-    def predict_delta(row, action_pitch_type, action_zone):
+    def predict_delta(context, action_pitch_type, action_zone):
         return ranker.score_action(
-            row["pitcher"], row["balls"], row["strikes"], action_pitch_type, action_zone,
+            *context, action_pitch_type, action_zone,
             stats=stats, thresholds=ranker.DEFAULT_THRESHOLDS, global_mean=global_mean,
             alpha=ranker.DEFAULT_ALPHA, global_count=train_count,
         )
@@ -153,8 +153,9 @@ def main():
     actual_sources = []
 
     for _, row in test_df.iterrows():
+        context = (row["pitcher"], row["balls"], row["strikes"])
         pred, source, count = predict_delta(
-            row,
+            context,
             row["action_pitch_type"],
             row["action_zone"],
         )
@@ -196,11 +197,13 @@ def main():
     recommendation_rows = []
 
     for _, row in test_df.iterrows():
+        pitcher = row["pitcher"]
+        context = (pitcher, row["balls"], row["strikes"])
         lstm_candidates = parse_top3(row.get("top3_pitch_type", np.nan))
 
         if not lstm_candidates:
             lstm_candidates = pitcher_top_pitches.get(
-                row["pitcher"],
+                pitcher,
                 global_top_pitches,
             )
 
@@ -218,7 +221,7 @@ def main():
                 candidate_pitches.append(p)
 
         # 2. 해당 투수의 자주 던지는 구종 Top-3 추가
-        fallback_candidates = pitcher_top_pitches.get(row["pitcher"], [])
+        fallback_candidates = pitcher_top_pitches.get(pitcher, [])
 
         for p in fallback_candidates:
             p = str(p).strip()
@@ -244,7 +247,7 @@ def main():
 
         for pitch in candidate_pitches:
             for zone in valid_zones:
-                score, source, count = predict_delta(row, pitch, zone)
+                score, source, count = predict_delta(context, pitch, zone)
 
                 candidates.append(
                     {
@@ -297,7 +300,7 @@ def main():
 
             # 실제 선택의 예측 점수와 추천 선택의 예측 점수 차이
             actual_score, actual_source, actual_count = predict_delta(
-                row,
+                context,
                 row["action_pitch_type"],
                 row["action_zone"],
             )
