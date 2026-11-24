@@ -85,6 +85,16 @@ def parse_top3(text):
     return values
 
 
+def select_candidate_pitches(lstm_pitches, pitcher_pitches, global_pitches):
+    """Keep LSTM then pitcher order, with global pitches as the last fallback."""
+    for pitches in ((*lstm_pitches, *pitcher_pitches), global_pitches):
+        cleaned = (str(pitch).strip() for pitch in pitches)
+        candidates = list(dict.fromkeys(pitch for pitch in cleaned if pitch not in ("", "nan", "None", "OTHER")))
+        if candidates:
+            return candidates
+    return []
+
+
 def regression_metrics(y_true, y_pred):
     return {
         "mae": mean_absolute_error(y_true, y_pred),
@@ -93,22 +103,52 @@ def regression_metrics(y_true, y_pred):
     }
 
 
-def write_diagnostics(y_true, ranker_metrics, *, train_count, global_mean, lstm_top3, actual_sources):
-    baseline_metrics = regression_metrics(y_true, np.full(len(y_true), global_mean, dtype=float))
-    matched = int(lstm_top3.notna().sum())
+def write_diagnostics(
+    test_df, y_true, ranker_metrics, *, train_count, global_mean, zone_stats, actual_sources, candidate_counts,
+):
+    test_count = len(y_true)
+    pair_predictions = []
+    pair_matches = 0
+    for key in zip(test_df["action_pitch_type"], test_df["action_zone"], strict=True):
+        stat = zone_stats.get(key)
+        if stat is not None and stat["count"] > 0:
+            pair_predictions.append(stat["mean"])
+            pair_matches += 1
+        else:
+            pair_predictions.append(global_mean)
+
+    metrics_by_model = {
+        "empirical_ranker": ranker_metrics,
+        "train_global_mean": regression_metrics(y_true, np.full(test_count, global_mean, dtype=float)),
+        "train_pitch_zone_mean": regression_metrics(y_true, pair_predictions),
+    }
+    matched = int(test_df["top3_pitch_type"].notna().sum())
     report = {
         "target": ranker.TARGET_COL,
         "train_rows": train_count,
-        "test_rows": len(y_true),
+        "test_rows": test_count,
         "train_global_mean": float(global_mean),
         "observed_action_metrics": {
             name: {metric: float(value) if math.isfinite(value) else None for metric, value in metrics.items()}
-            for name, metrics in (("empirical_ranker", ranker_metrics), ("train_global_mean", baseline_metrics))
+            for name, metrics in metrics_by_model.items()
+        },
+        "train_pitch_zone_mean_counts": {
+            "pair_mean_rows": pair_matches,
+            "global_fallback_rows": test_count - pair_matches,
+        },
+        "candidate_coverage": {
+            name: {
+                "rows_with_candidates": counts["rows_with_candidates"],
+                "observed_action_covered_rows": counts["observed_action_covered_rows"],
+                "observed_action_coverage_rate": counts["observed_action_covered_rows"] / test_count,
+                "average_candidates_per_row": counts["total_candidates"] / test_count,
+            }
+            for name, counts in candidate_counts.items()
         },
         "lstm_top3_join": {
             "matched_rows": matched,
-            "missing_rows": len(y_true) - matched,
-            "match_rate": matched / len(y_true),
+            "missing_rows": test_count - matched,
+            "match_rate": matched / test_count,
         },
         "observed_action_source_counts": dict(Counter(actual_sources)),
     }
@@ -228,53 +268,26 @@ def main(*, diagnostics=False):
     test_df = load_lstm_predictions(test_df)
 
     recommendation_rows = []
+    candidate_counts = {"lstm_top3_with_frequency": Counter(), "frequency_only": Counter()}
+    zone_set = set(valid_zones)
 
     for _, row in test_df.iterrows():
         pitcher = row["pitcher"]
         context = (pitcher, row["balls"], row["strikes"])
         lstm_candidates = parse_top3(row.get("top3_pitch_type", np.nan))
+        pitcher_pitches = pitcher_top_pitches.get(pitcher, [])
+        candidate_pitches = select_candidate_pitches(lstm_candidates, pitcher_pitches, global_top_pitches)
 
-        if not lstm_candidates:
-            lstm_candidates = pitcher_top_pitches.get(
-                pitcher,
-                global_top_pitches,
-            )
-
-        # 중복 제거 + OTHER 제외
-        candidate_pitches = []
-
-        # 1. LSTM Top-3
-        for p in lstm_candidates:
-            p = str(p).strip()
-
-            if p in ["", "nan", "None", "OTHER"]:
-                continue
-
-            if p not in candidate_pitches:
-                candidate_pitches.append(p)
-
-        # 2. 해당 투수의 자주 던지는 구종 Top-3 추가
-        fallback_candidates = pitcher_top_pitches.get(pitcher, [])
-
-        for p in fallback_candidates:
-            p = str(p).strip()
-
-            if p in ["", "nan", "None", "OTHER"]:
-                continue
-
-            if p not in candidate_pitches:
-                candidate_pitches.append(p)
-
-        # 3. 그래도 비면 전체 top pitch 사용
-        if not candidate_pitches:
-            for p in global_top_pitches:
-                p = str(p).strip()
-
-                if p in ["", "nan", "None", "OTHER"]:
-                    continue
-
-                if p not in candidate_pitches:
-                    candidate_pitches.append(p)
+        if diagnostics:
+            frequency_pitches = select_candidate_pitches((), pitcher_pitches, global_top_pitches)
+            for rule, pitches in (("lstm_top3_with_frequency", candidate_pitches), ("frequency_only", frequency_pitches)):
+                counts = candidate_counts[rule]
+                size = len(pitches) * len(valid_zones)
+                counts["total_candidates"] += size
+                counts["rows_with_candidates"] += int(size > 0)
+                counts["observed_action_covered_rows"] += int(
+                    row["action_pitch_type"] in pitches and row["action_zone"] in zone_set
+                )
 
         candidates = []
 
@@ -356,8 +369,8 @@ def main(*, diagnostics=False):
     rec_df.to_csv(RECOMMEND_OUTPUT_PATH, index=False, encoding="utf-8-sig")
     if diagnostics:
         write_diagnostics(
-            y_true, metrics, train_count=train_count, global_mean=global_mean,
-            lstm_top3=test_df["top3_pitch_type"], actual_sources=actual_sources,
+            test_df, y_true, metrics, train_count=train_count, global_mean=global_mean,
+            zone_stats=stats["action_zone"], actual_sources=actual_sources, candidate_counts=candidate_counts,
         )
 
     print("\n===== 추천 결과 샘플 =====")
@@ -385,6 +398,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--diagnostics", action="store_true",
-        help="Write the observed-action ranker and training-mean comparison with the LSTM join rate.",
+        help="Compare observed-action errors and candidate coverage against simple baselines.",
     )
     main(diagnostics=parser.parse_args().diagnostics)
