@@ -28,7 +28,7 @@
 
         <div class="status-card">
           <strong>현재 데모 상태</strong>
-          <div id="healthText">서버 상태 확인 전</div>
+          <div id="healthText" role="status">서버 상태 확인 중</div>
         </div>
       </div>
     </header>
@@ -88,7 +88,7 @@
           </div>
 
           <div class="button-row">
-            <button class="btn-primary" onclick="recommend()">추천 받기</button>
+            <button id="recommendButton" class="btn-primary" onclick="recommend()" disabled>추천 받기</button>
             <button class="btn-secondary" onclick="resetDemo()">예시값 초기화</button>
           </div>
 
@@ -195,7 +195,7 @@
             </div>
             <div class="button-row">
               <button class="btn-ghost" onclick="setActiveCompare(event.detail === 0)">비교 위치 선택</button>
-              <button class="btn-primary" onclick="compareAction()">직접 선택 비교</button>
+              <button id="compareButton" class="btn-primary" onclick="compareAction()" disabled>직접 선택 비교</button>
             </div>
             <div id="compareResult" class="comparison-result" style="display:none;"></div>
           </div>
