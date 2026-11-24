@@ -4,12 +4,10 @@ import unittest
 
 import pandas as pd
 
-from tests.support import REPO, command, pitch, write_csv
+from tests.support import pitch, run_cli_in_process, write_csv
 
 
 class OutcomeHistoryTests(unittest.TestCase):
-    script = str(REPO / "src/make_outcome_sequence.py")
-
     def test_known_unlabeled_pitches_remain_in_history_only(self):
         rows = [pitch(1, number, "FF", zone=number) for number in range(1, 9)]
         rows[2]["delta_run_exp"] = None
@@ -25,9 +23,9 @@ class OutcomeHistoryTests(unittest.TestCase):
             root = Path(directory)
             write_csv(root, "data/raw/savant_data_with_outcome.csv", reversed(rows))
             data = root / "data/processed/outcome_sequence_data.csv"
-            command(root, self.script)
+            run_cli_in_process(root, "make_outcome_sequence")
             before = pd.read_csv(data).set_index(["at_bat_number", "pitch_number"])
-            command(root, self.script, "--keep-unlabeled-history")
+            run_cli_in_process(root, "make_outcome_sequence", "--keep-unlabeled-history")
             after = pd.read_csv(data).set_index(["at_bat_number", "pitch_number"])
 
         self.assertEqual(before.index.tolist(), [(1, 2), (1, 4), (1, 7), (1, 8), (2, 3)])
@@ -58,7 +56,9 @@ class OutcomeHistoryTests(unittest.TestCase):
                 "game_pk,game_date,split\n101,2025-06-01,train\n102,2025-06-02,validation\n103,2025-06-03,test\n",
             )
             write_csv(root, "data/raw/savant_data_with_outcome.csv", rows)
-            command(root, self.script, "--train-only-rare-pitches", "--keep-unlabeled-history", game_split=manifest)
+            run_cli_in_process(
+                root, "make_outcome_sequence", "--train-only-rare-pitches", "--keep-unlabeled-history", game_split=manifest,
+            )
             data = pd.read_csv(root / "data/processed/outcome_sequence_data.csv")
 
         test = data.loc[data["game_pk"] == 103]

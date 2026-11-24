@@ -4,12 +4,10 @@ import unittest
 
 import pandas as pd
 
-from tests.support import REPO, command, pitch, write_csv
+from tests.support import pitch, run_cli_in_process, write_csv
 
 
 class OutcomeRarePitchTests(unittest.TestCase):
-    script = str(REPO / "src/make_outcome_sequence.py")
-
     def test_rarity_uses_only_ranker_fit_games_when_requested(self):
         game_pitches = [
             ["SL"] * 499 + ["FF"] * 494 + ["KN"] * 500,
@@ -29,9 +27,9 @@ class OutcomeRarePitchTests(unittest.TestCase):
             )
             write_csv(root, "data/raw/savant_data_with_outcome.csv", rows)
             result_path = root / "data/processed/outcome_sequence_data.csv"
-            command(root, self.script, game_split=manifest)
+            run_cli_in_process(root, "make_outcome_sequence", game_split=manifest)
             default = pd.read_csv(result_path)
-            command(root, self.script, "--train-only-rare-pitches", game_split=manifest)
+            run_cli_in_process(root, "make_outcome_sequence", "--train-only-rare-pitches", game_split=manifest)
             fit_only = pd.read_csv(result_path)
 
         keys = ["game_pk", "at_bat_number", "pitch_number", "action_pitch_type_original", "delta_run_exp"]
@@ -45,5 +43,5 @@ class OutcomeRarePitchTests(unittest.TestCase):
 
     def test_train_only_mode_requires_a_game_manifest(self):
         with TemporaryDirectory() as directory:
-            with self.assertRaisesRegex(AssertionError, "requires PITCH_GAME_SPLIT"):
-                command(Path(directory), self.script, "--train-only-rare-pitches")
+            with self.assertRaisesRegex(ValueError, "requires PITCH_GAME_SPLIT"):
+                run_cli_in_process(Path(directory), "make_outcome_sequence", "--train-only-rare-pitches")
