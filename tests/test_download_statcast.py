@@ -49,3 +49,24 @@ def test_cli_rejects_invalid_dates_before_downloading(argv, error, monkeypatch, 
     assert exit_info.value.code == 2
     assert error in capsys.readouterr().err
     download_data.assert_not_called()
+
+
+@pytest.mark.parametrize("rows", [[], [pitch(1, 1, "FF", game_type="D")]])
+def test_empty_regular_season_download_preserves_existing_files(rows, monkeypatch, tmp_path):
+    provider = Mock(return_value=pd.DataFrame(rows))
+    monkeypatch.setitem(sys.modules, "pybaseball", SimpleNamespace(statcast=provider, cache=Mock()))
+    monkeypatch.setattr(download, "RAW_DIR", tmp_path)
+    files = {
+        "MODEL_OUTPUT_PATH": tmp_path / "savant_data.csv",
+        "WIDE_OUTPUT_PATH": tmp_path / "savant_data_with_outcome.csv",
+        "COLUMN_LIST_PATH": tmp_path / "statcast_columns.txt",
+    }
+    originals = {path: path.name.encode() for path in files.values()}
+    for option, path in files.items():
+        path.write_bytes(originals[path])
+        monkeypatch.setattr(download, option, path)
+
+    with pytest.raises(ValueError, match="정규시즌 투구가 없습니다"):
+        download.main("2025-10-01", "2025-10-01")
+
+    assert {path: path.read_bytes() for path in originals} == originals
