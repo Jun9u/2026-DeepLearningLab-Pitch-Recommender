@@ -1,7 +1,10 @@
 import argparse
 from collections import Counter
+from hashlib import file_digest
 import json
 import math
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import pandas as pd
 import numpy as np
 
@@ -9,11 +12,11 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 if __package__:
     from . import empirical_ranker as ranker
-    from .game_split import split_indices
+    from .game_split import GAME_SPLIT_HASH_COL, read_split_manifest, split_indices, split_manifest_hash
     from .run_paths import run_directory
 else:
     import empirical_ranker as ranker
-    from game_split import split_indices
+    from game_split import GAME_SPLIT_HASH_COL, read_split_manifest, split_indices, split_manifest_hash
     from run_paths import run_directory
 
 
@@ -42,7 +45,7 @@ KEY_COLS = [
 # 유틸
 # =========================
 
-def load_lstm_predictions(test_df):
+def load_lstm_predictions(test_df, expected_split_hash):
     prediction_path = LSTM_PRED_PATH
     if not prediction_path.exists():
         prediction_path = RUN_DIR / "outputs" / prediction_path.name
@@ -52,17 +55,23 @@ def load_lstm_predictions(test_df):
         test_df["top3_pitch_type"] = np.nan
         return test_df
 
-    pred_cols = pd.read_csv(prediction_path, nrows=0).columns.tolist()
-
     needed = KEY_COLS + ["top3_pitch_type"]
-    missing = [c for c in needed if c not in pred_cols]
+    columns = {*needed, GAME_SPLIT_HASH_COL}
+    pred_df = pd.read_csv(prediction_path, usecols=columns.__contains__)
+    has_split_hash = GAME_SPLIT_HASH_COL in pred_df.columns
+    if has_split_hash != (expected_split_hash is not None):
+        raise ValueError(f"LSTM 예측의 경기 분할 정보가 현재 평가와 일치하지 않습니다: {prediction_path}")
+    missing = [c for c in needed if c not in pred_df.columns]
 
     if missing:
         print("\nLSTM 예측 파일에 필요한 컬럼이 없습니다:", missing)
         test_df["top3_pitch_type"] = np.nan
         return test_df
 
-    pred_df = pd.read_csv(prediction_path, usecols=needed)
+    if has_split_hash:
+        split_hashes = pred_df.pop(GAME_SPLIT_HASH_COL)
+        if split_hashes.empty or not split_hashes.eq(expected_split_hash).fillna(False).all():
+            raise ValueError(f"LSTM 예측의 경기 분할 SHA-256이 현재 평가와 일치하지 않습니다: {prediction_path}")
     pred_df = pred_df.drop_duplicates(KEY_COLS)
 
     merged = test_df.merge(pred_df, on=KEY_COLS, how="left")
@@ -85,16 +94,6 @@ def parse_top3(text):
     return values
 
 
-def select_candidate_pitches(lstm_pitches, pitcher_pitches, global_pitches):
-    """Keep LSTM then pitcher order, with global pitches as the last fallback."""
-    for pitches in ((*lstm_pitches, *pitcher_pitches), global_pitches):
-        cleaned = (str(pitch).strip() for pitch in pitches)
-        candidates = list(dict.fromkeys(pitch for pitch in cleaned if pitch not in ("", "nan", "None", "OTHER")))
-        if candidates:
-            return candidates
-    return []
-
-
 def regression_metrics(y_true, y_pred):
     return {
         "mae": mean_absolute_error(y_true, y_pred),
@@ -104,7 +103,8 @@ def regression_metrics(y_true, y_pred):
 
 
 def write_diagnostics(
-    test_df, y_true, ranker_metrics, *, train_count, global_mean, zone_stats, actual_sources, candidate_counts,
+    output, test_df, y_true, ranker_metrics, *, train_count, global_mean, zone_stats, actual_sources,
+    candidate_counts, result_paths,
 ):
     test_count = len(y_true)
     pair_predictions = []
@@ -123,7 +123,13 @@ def write_diagnostics(
         "train_pitch_zone_mean": regression_metrics(y_true, pair_predictions),
     }
     matched = int(test_df["top3_pitch_type"].notna().sum())
+    result_hashes = {}
+    for path in result_paths:
+        with path.open("rb") as stream:
+            result_hashes[path.name] = file_digest(stream, "sha256").hexdigest()
+
     report = {
+        "result_sha256": result_hashes,
         "target": ranker.TARGET_COL,
         "train_rows": train_count,
         "test_rows": test_count,
@@ -152,10 +158,9 @@ def write_diagnostics(
         },
         "observed_action_source_counts": dict(Counter(actual_sources)),
     }
-    DIAGNOSTICS_OUTPUT_PATH.write_text(
+    output.write_text(
         json.dumps(report, indent=2, allow_nan=False) + "\n", encoding="utf-8",
     )
-    print("진단 저장:", DIAGNOSTICS_OUTPUT_PATH)
 
 
 def main(*, diagnostics=False):
@@ -172,7 +177,8 @@ def main(*, diagnostics=False):
     if sort_cols:
         df = df.sort_values(sort_cols).reset_index(drop=True)
 
-    train, _, test = split_indices(df, with_validation=False)
+    manifest = read_split_manifest()
+    train, _, test = split_indices(df, with_validation=False, manifest_bytes=manifest)
     train_df = df.iloc[train].copy()
     test_df = df.iloc[test].copy()
 
@@ -207,11 +213,12 @@ def main(*, diagnostics=False):
     pitcher_top_pitches = (
         train_df
         .groupby("pitcher")["action_pitch_type"]
-        .agg(lambda x: x.value_counts().index[:3].tolist())
+        .agg(ranker.top_pitch_types)
         .to_dict()
     )
 
-    global_top_pitches = train_df["action_pitch_type"].value_counts().index[:3].tolist()
+    global_top_pitches = ranker.top_pitch_types(train_df["action_pitch_type"])
+    supported_pitches = {code for (code,) in stats["action"] if code != "OTHER"}
 
     print("\n===== 전체 top pitches =====")
     print(global_top_pitches)
@@ -257,15 +264,8 @@ def main(*, diagnostics=False):
         ]
     )
 
-    EVAL_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    eval_df.to_csv(EVAL_OUTPUT_PATH, index=False, encoding="utf-8-sig")
-
-    print("\n===== 실제 action delta_run_exp 예측 성능 =====")
-    print(eval_df.to_string(index=False))
-    print("저장:", EVAL_OUTPUT_PATH)
-
     # LSTM top3와 결합
-    test_df = load_lstm_predictions(test_df)
+    test_df = load_lstm_predictions(test_df, split_manifest_hash(manifest))
 
     recommendation_rows = []
     candidate_counts = {"lstm_top3_with_frequency": Counter(), "frequency_only": Counter()}
@@ -276,10 +276,12 @@ def main(*, diagnostics=False):
         context = (pitcher, row["balls"], row["strikes"])
         lstm_candidates = parse_top3(row.get("top3_pitch_type", np.nan))
         pitcher_pitches = pitcher_top_pitches.get(pitcher, [])
-        candidate_pitches = select_candidate_pitches(lstm_candidates, pitcher_pitches, global_top_pitches)
+        candidate_pitches = ranker.select_candidate_pitches(
+            lstm_candidates, pitcher_pitches, global_top_pitches, supported_pitches,
+        )
 
         if diagnostics:
-            frequency_pitches = select_candidate_pitches((), pitcher_pitches, global_top_pitches)
+            frequency_pitches = ranker.select_candidate_pitches((), pitcher_pitches, global_top_pitches, supported_pitches)
             for rule, pitches in (("lstm_top3_with_frequency", candidate_pitches), ("frequency_only", frequency_pitches)):
                 counts = candidate_counts[rule]
                 size = len(pitches) * len(valid_zones)
@@ -366,12 +368,32 @@ def main(*, diagnostics=False):
         recommendation_rows.append(out)
 
     rec_df = pd.DataFrame(recommendation_rows)
-    rec_df.to_csv(RECOMMEND_OUTPUT_PATH, index=False, encoding="utf-8-sig")
-    if diagnostics:
-        write_diagnostics(
-            test_df, y_true, metrics, train_count=train_count, global_mean=global_mean,
-            zone_stats=stats["action_zone"], actual_sources=actual_sources, candidate_counts=candidate_counts,
-        )
+    EVAL_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(prefix=".ranker-", dir=EVAL_OUTPUT_PATH.parent) as temporary:
+        staging = Path(temporary)
+        eval_csv = staging / EVAL_OUTPUT_PATH.name
+        recommendations_csv = staging / RECOMMEND_OUTPUT_PATH.name
+        report_path = staging / DIAGNOSTICS_OUTPUT_PATH.name
+        eval_df.to_csv(eval_csv, index=False, encoding="utf-8-sig")
+        rec_df.to_csv(recommendations_csv, index=False, encoding="utf-8-sig")
+        if diagnostics:
+            write_diagnostics(
+                report_path, test_df, y_true, metrics, train_count=train_count, global_mean=global_mean,
+                zone_stats=stats["action_zone"], actual_sources=actual_sources, candidate_counts=candidate_counts,
+                result_paths=(eval_csv, recommendations_csv),
+            )
+
+        # Invalidate the older report before exposing a new CSV.
+        DIAGNOSTICS_OUTPUT_PATH.unlink(missing_ok=True)
+        eval_csv.replace(EVAL_OUTPUT_PATH)
+        recommendations_csv.replace(RECOMMEND_OUTPUT_PATH)
+        if diagnostics:
+            report_path.replace(DIAGNOSTICS_OUTPUT_PATH)
+            print("진단 저장:", DIAGNOSTICS_OUTPUT_PATH)
+
+    print("\n===== 실제 action delta_run_exp 예측 성능 =====")
+    print(eval_df.to_string(index=False))
+    print("저장:", EVAL_OUTPUT_PATH)
 
     print("\n===== 추천 결과 샘플 =====")
     show_cols = [

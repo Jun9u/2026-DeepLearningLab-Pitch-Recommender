@@ -1,3 +1,4 @@
+from hashlib import sha256
 from pathlib import Path
 import pickle
 from tempfile import TemporaryDirectory
@@ -45,15 +46,20 @@ class GameSplitPipelineTests(unittest.TestCase):
 
             for model in ("lstm", "transformer"):
                 predictions = pd.read_csv(root / f"results/{model}_weighted_macro_predictions.csv")
-                self.assertEqual(len(predictions), 599)
                 self.assertEqual(set(predictions["game_pk"]), expected_test)
-                self.assertNotIn("KC", predictions["true_pitch_type"].tolist())
+                if model == "lstm":
+                    self.assertEqual(len(predictions), 600)
+                    self.assertEqual(set(predictions["game_split_sha256"]), {sha256(manifest.read_bytes()).hexdigest()})
+                    unscored = predictions.loc[~predictions["included_in_test_metrics"]]
+                    self.assertEqual(unscored["true_pitch_type"].tolist(), ["KC"])
+                    self.assertTrue(unscored["top3_pitch_type"].notna().all())
+                else:
+                    self.assertEqual(len(predictions), 599)
+                    self.assertNotIn("KC", predictions["true_pitch_type"].tolist())
             recommendations = pd.read_csv(root / "results/outcome_empirical_recommendations.csv")
             self.assertEqual(len(recommendations), 590)
             self.assertEqual(set(recommendations["game_pk"]), expected_test)
-            unmatched = recommendations.loc[recommendations["lstm_top3_pitch_type"].isna()]
-            self.assertEqual(len(unmatched), 1)
-            self.assertEqual(unmatched["game_pk"].tolist(), [108])
+            self.assertTrue(recommendations["lstm_top3_pitch_type"].notna().all())
 
             outcomes = pd.read_csv(root / "data/processed/outcome_sequence_data.csv")
             fit = outcomes.loc[~outcomes["game_pk"].isin(expected_test)]

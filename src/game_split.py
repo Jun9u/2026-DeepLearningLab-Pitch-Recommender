@@ -1,6 +1,8 @@
 """Build and apply one chronological game split across experiment entry points."""
 
 import os
+from hashlib import sha256
+from io import BytesIO
 from pathlib import Path
 
 import pandas as pd
@@ -13,6 +15,7 @@ else:
 
 GAME_COLUMNS = ["game_date", "game_pk"]
 SPLITS = ["train", "validation", "test"]
+GAME_SPLIT_HASH_COL = "game_split_sha256"
 
 
 def game_keys(frame):
@@ -48,15 +51,25 @@ def build_game_split(frame):
     return games
 
 
-def split_indices(frame, *, with_validation=True):
-    """Return positional train, validation and test selectors for a sorted frame."""
+def read_split_manifest():
     configured = os.environ.get("PITCH_GAME_SPLIT")
-    if not configured:
+    return Path(configured).expanduser().read_bytes() if configured else None
+
+
+def split_manifest_hash(manifest):
+    return sha256(manifest).hexdigest() if manifest is not None else None
+
+
+def split_indices(frame, *, with_validation=True, manifest_bytes=None):
+    """Return positional train, validation and test selectors for a sorted frame."""
+    if manifest_bytes is None:
+        manifest_bytes = read_split_manifest()
+    if manifest_bytes is None:
         test_start = int(len(frame) * 0.8)
         train_end = int(len(frame) * 0.7) if with_validation else test_start
         return slice(0, train_end), slice(train_end, test_start), slice(test_start, None)
 
-    manifest = pd.read_csv(Path(configured).expanduser(), usecols=[*GAME_COLUMNS, "split"])
+    manifest = pd.read_csv(BytesIO(manifest_bytes), usecols=[*GAME_COLUMNS, "split"])
     manifest = game_keys(manifest).assign(split=manifest["split"])
     if manifest["game_pk"].duplicated().any() or set(manifest["split"]) != set(SPLITS):
         raise ValueError("Game split must assign each game once and include train, validation and test")

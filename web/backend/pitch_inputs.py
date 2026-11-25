@@ -49,9 +49,10 @@ def clean_pitch_token(p, *, keep_other=False):
     return p
 
 
-def encode_pitch_history(prev_pitch_types, prev_zones, pitch_vocab, zone_vocab):
+def encode_pitch_history(prev_pitch_types, prev_zones, pitch_vocab, zone_vocab, *, other_pitches=()):
     """Keep one token per history entry so paired pitches and zones stay aligned."""
     pitches = [clean_pitch_token(pitch, keep_other=True) or "UNK" for pitch in prev_pitch_types]
+    pitches = ["OTHER" if pitch in other_pitches else pitch for pitch in pitches]
     zones = [normalize_zone(zone) for zone in prev_zones]
 
     return (

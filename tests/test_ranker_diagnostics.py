@@ -1,4 +1,5 @@
 import json
+from hashlib import sha256
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -6,6 +7,8 @@ import unittest
 from unittest.mock import patch
 
 from src import outcome_empirical_recommender as recommender
+from src.empirical_ranker import select_candidate_pitches, top_pitch_types
+import pandas as pd
 from tests.support import REPO, command, sparse_outcome_rows, write_csv
 
 
@@ -13,7 +16,10 @@ class RankerDiagnosticsTests(unittest.TestCase):
     script = str(REPO / "src/outcome_empirical_recommender.py")
 
     def test_candidate_rules_can_exhaust_all_pitch_sources(self):
-        self.assertEqual(recommender.select_candidate_pitches(("OTHER", ""), (" None ",), ("nan",)), [])
+        self.assertEqual(select_candidate_pitches(("OTHER", ""), (" None ",), ("nan",), {"FF"}), [])
+        pitches = top_pitch_types(pd.Series(["OTHER"] * 4 + ["FF"] * 3 + ["SL"] * 2 + ["CH"]))
+        self.assertEqual(pitches, ["FF", "SL", "CH"])
+        self.assertEqual(select_candidate_pitches(("UN", " ch "), pitches, (), set(pitches)), ["CH", "FF", "SL"])
 
     def test_compares_models_on_the_same_test_rows_without_changing_csv_outputs(self):
         rows = [
@@ -47,6 +53,10 @@ class RankerDiagnosticsTests(unittest.TestCase):
             command(root, self.script, "--diagnostics")
             report = json.loads(diagnostics.read_text(encoding="utf-8"))
             self.assertEqual([result.read_bytes() for result in results], originals)
+            self.assertEqual(report["result_sha256"], {path.name: sha256(blob).hexdigest()
+                             for path, blob in zip(results, originals, strict=True)})
+            command(root, self.script)
+            self.assertFalse(diagnostics.exists())
 
         self.assertEqual((report["train_rows"], report["test_rows"]), (16, 4))
         self.assertAlmostEqual(report["train_global_mean"], 0.2)
@@ -88,8 +98,9 @@ class RankerDiagnosticsTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             write_csv(root, "outcomes.csv", rows)
-            write_csv(root, "predictions.csv", predictions)
             write_csv(root, "game_split.csv", games)
+            split_hash = sha256((root / "game_split.csv").read_bytes()).hexdigest()
+            write_csv(root, "predictions.csv", [{**row, "game_split_sha256": split_hash} for row in predictions])
             diagnostics = root / "diagnostics.json"
             with patch.dict(os.environ, {"PITCH_GAME_SPLIT": str(root / "game_split.csv")}), patch.multiple(
                 recommender, DATA_PATH=root / "outcomes.csv", LSTM_PRED_PATH=root / "predictions.csv",
@@ -97,6 +108,14 @@ class RankerDiagnosticsTests(unittest.TestCase):
                 DIAGNOSTICS_OUTPUT_PATH=diagnostics,
             ):
                 recommender.main(diagnostics=True)
+                previous = (root / "eval.csv").read_bytes()
+                write_csv(root, "predictions.csv", [{**row, "game_split_sha256": "different"} for row in predictions])
+                with self.assertRaisesRegex(ValueError, "SHA-256"):
+                    recommender.main(diagnostics=True)
+                write_csv(root, "predictions.csv", predictions)
+                with self.assertRaisesRegex(ValueError, "경기 분할 정보"):
+                    recommender.main(diagnostics=True)
+                self.assertEqual((root / "eval.csv").read_bytes(), previous)
             report = json.loads(diagnostics.read_text(encoding="utf-8"))
 
         self.assertEqual((report["train_rows"], report["test_rows"]), (2, 6))

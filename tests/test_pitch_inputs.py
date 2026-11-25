@@ -54,6 +54,14 @@ class PitchInputTests(unittest.TestCase):
         seq_pitch, seq_zone = encode_pitch_history(["OTHER", "SL"], ["Z1", "Z2"], pitch_vocab, zone_vocab)
         self.assertEqual(list(zip(seq_pitch, seq_zone)), [(0, 0), (0, 0), (0, 0), (1, 2), (3, 3)])
 
+    def test_artifact_rare_pitch_mapping_applies_to_history(self):
+        pitch_vocab = {"PAD": 0, "UNK": 1, "OTHER": 2}
+        zone_vocab = {"ZPAD": 0, "ZUNK": 1, "Z1": 2}
+        codes, _ = encode_pitch_history(
+            [" ep ", "X"], ["Z1", "Z1"], pitch_vocab, zone_vocab, other_pitches={"EP"},
+        )
+        self.assertEqual(codes, [0, 0, 0, 2, 1])
+
     def test_serving_numeric_features_apply_training_order_and_float32_scaler(self):
         mean = np.array([1, 0, 2, 3, 1, 0, 1], dtype=np.float32)
         scale = np.array([2, 2, 1, 4, 2, 4, 8], dtype=np.float32)

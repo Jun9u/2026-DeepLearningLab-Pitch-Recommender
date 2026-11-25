@@ -230,6 +230,7 @@ python -u src/export_serving_artifacts.py
 - `train_transformer.py`는 **비교 실험용**이므로 LSTM 기반 웹 데모 구동에 필수는 아닙니다.
 - `outcome_empirical_recommender.py`는 평가 결과 및 추천 결과를 생성합니다. **웹 서빙 파일 생성에는 `make_outcome_sequence.py`, `train_lstm.py` 실행 결과와 `export_serving_artifacts.py`가 필수**입니다.
 - 랭커 평가에 `--diagnostics`를 추가하면 `results/outcome_empirical_diagnostics.json`을 생성합니다. 같은 테스트 투구의 관측 `delta_run_exp`를 기준으로 기존 랭커, 적합 구간 전체 평균, 구종·위치별 단순 평균의 MAE·RMSE·R²를 비교합니다. 적합 구간에 없는 조합은 전체 평균을 사용하고 해당 건수를 기록합니다. LSTM Top-3와 구종 빈도를 함께 쓰는 기존 후보 규칙과 빈도만 쓰는 규칙에 대해, 순위를 매기기 전 실제 구종·위치가 후보에 포함된 비율과 평균 후보 조합 수를 기록합니다. LSTM Top-3 결합 건수도 이 파일에서 확인할 수 있습니다. [2주 표본 결과와 해석](docs/MAINTENANCE.md#2주-표본-기준선-비교)
+- 진단 JSON의 `result_sha256`으로 같은 실행의 평가·추천 CSV를 확인할 수 있습니다. 기본 평가를 다시 실행하면 이전 진단 파일을 제거합니다.
 - 자동 통합 테스트는 합성 Statcast 응답으로 실행 경로, 학습, 서빙 파일 생성과 API 응답을 확인합니다. [테스트 실행 방법](tests/README.md)
 
 ### 경기 단위 시간 분할 실험
@@ -244,13 +245,15 @@ export PITCH_GAME_SPLIT="$PITCH_RUN_DIR/data/processed/game_split.csv"
 
 이후 같은 터미널에서 위 파이프라인의 `preprocess.py`부터 실행합니다. 분류 시퀀스의 희귀 구종 기준과 LSTM·Transformer는 `train`을 사용하고, 두 모델은 `validation`으로 체크포인트를 고릅니다. 다수결과 랭커는 `train`과 `validation`을 합쳐 적합합니다. 평가는 모두 같은 `test` 경기 목록을 사용하며, 각 파이프라인의 기존 필터에 따라 투구 수는 달라질 수 있습니다. `PITCH_GAME_SPLIT`을 생략하면 기존 투구 행 단위 분할을 사용합니다.
 
-LSTM과 Transformer는 검증·테스트의 정답 구종이 학습 클래스에 없는 행을 평가에서 제외합니다. 두 분할 모드 모두 구간별 제외 행 수와 전체 행 수를 출력하며, 평가 행이 한 건도 남지 않으면 학습을 시작하기 전에 오류를 표시합니다.
+LSTM과 Transformer는 정답 구종이 학습 클래스에 없는 행을 검증·테스트 지표에서 제외합니다. LSTM은 추천 평가를 위해 테스트 전체의 예측을 저장하며, 제외된 행이 있으면 `included_in_test_metrics`로 지표 계산 대상을 표시합니다. 날짜 분할에서 랭커는 동일한 분할표의 SHA-256이 있는 LSTM 예측 파일만 결합합니다. 기존 날짜 분할 예측 파일은 같은 분할표로 다시 생성하세요.
 
-같은 경기 분할에서 랭커용 희귀 구종 기준만 바꿔 실험하려면 별도 `PITCH_RUN_DIR`에 같은 원본 입력, 분할표, LSTM 예측 CSV와 체크포인트를 준비합니다. 같은 `PITCH_GAME_SPLIT`을 지정하고 `make_outcome_sequence.py`에 `--train-only-rare-pitches`를 추가한 뒤 랭커 평가와 서빙 파일 생성을 실행합니다. 이 옵션은 랭커를 적합하는 `train`·`validation` 경기의 필터 통과 투구만 집계합니다. 그 집계에서 500건 미만이거나 등장하지 않은 구종과 기존 강제 통합 구종은 `OTHER`가 됩니다.
+날짜 분할에서 `make_outcome_sequence.py`는 랭커 적합에 쓰는 `train`·`validation` 경기만 희귀 구종 집계에 포함합니다. 그 집계에서 500건 미만이거나 등장하지 않은 구종과 기존 강제 통합 구종은 `OTHER`가 됩니다. 기존 명령의 `--train-only-rare-pitches`도 같은 규칙을 사용합니다.
 
-결측 투구 이력만 비교하려면 같은 설정과 별도 실행 경로를 쓰고 `make_outcome_sequence.py`에 `--keep-unlabeled-history`를 추가합니다. 구종을 아는 투구는 위치나 결과값이 빠져도 같은 타석의 이력에 남고, 비어 있는 위치는 `ZUNK`로 기록됩니다. 예측 대상은 위치와 결과값이 모두 있는 투구입니다. 해당 타석의 첫 투구에 결과값이 없으면 그다음 투구부터 이력을 사용할 수 있습니다. 희귀 구종 빈도는 기존과 같이 위치와 결과값이 모두 있는 투구에서 계산합니다.
+랭커 CSV의 결측 투구 이력을 비교하려면 같은 설정과 별도 실행 경로를 쓰고 `make_outcome_sequence.py`에 `--keep-unlabeled-history`를 추가합니다. 구종을 아는 투구는 위치나 결과값이 빠져도 이력에 남고, 위치가 비어 있으면 `ZUNK`로 기록됩니다. 이 옵션은 랭커 CSV의 이력과 평가 행 선택에 적용됩니다. 이력이 구종 예측에 미치는 효과는 같은 테스트 투구에서 LSTM 입력 이력을 바꿔 별도로 평가합니다.
 
 ### 웹 서버 실행
+
+새 LSTM 체크포인트는 희귀 구종 이력의 `OTHER` 매핑을 함께 저장합니다. 서빙에도 이 매핑을 적용하려면 LSTM을 학습한 뒤 다시 내보냅니다.
 
 서버는 시작할 때 `models/serving-current`가 가리키는 `models/serving/<세대>/`의 LSTM과 랭커를 함께 로드합니다. 내보내기는 두 파일을 준비한 뒤 현재 세대를 교체합니다. 기존 실행 경로에 `serving-current`가 없으면 `models/` 바로 아래의 기존 파일 두 개를 읽습니다. 새 터미널에서는 수집·학습에 사용한 실행 경로를 다시 지정하세요.
 
