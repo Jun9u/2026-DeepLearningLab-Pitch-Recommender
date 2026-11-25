@@ -172,12 +172,7 @@ def export_outcome_ranker_artifact(destination=None):
     pitcher_top_pitches = (
         train_df
         .groupby("pitcher")["action_pitch_type"]
-        .agg(
-            lambda x: [
-                p for p in x.value_counts().index.tolist()
-                if p != "OTHER"
-            ][:3]
-        )
+        .agg(ranker.top_pitch_types)
         .to_dict()
     )
 
@@ -186,10 +181,7 @@ def export_outcome_ranker_artifact(destination=None):
         int(k): v for k, v in pitcher_top_pitches.items()
     }
 
-    global_top_pitches = [
-        p for p in train_df["action_pitch_type"].value_counts().index.tolist()
-        if p != "OTHER"
-    ][:3]
+    global_top_pitches = ranker.top_pitch_types(train_df["action_pitch_type"])
 
     artifact = {
         "target_col": ranker.TARGET_COL,

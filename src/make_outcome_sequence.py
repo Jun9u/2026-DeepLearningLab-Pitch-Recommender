@@ -66,7 +66,8 @@ def zone_to_token(x):
 
 
 def main(*, train_only_rare_pitches=False, keep_unlabeled_history=False):
-    if train_only_rare_pitches and not os.environ.get("PITCH_GAME_SPLIT"):
+    game_split_enabled = bool(os.environ.get("PITCH_GAME_SPLIT"))
+    if train_only_rare_pitches and not game_split_enabled:
         raise ValueError("--train-only-rare-pitches requires PITCH_GAME_SPLIT")
 
     if not INPUT_PATH.exists():
@@ -109,7 +110,7 @@ def main(*, train_only_rare_pitches=False, keep_unlabeled_history=False):
     counts = outcome_rows["pitch_type_original"].value_counts()
     fit_counts = counts
 
-    if GROUP_RARE_PITCHES and train_only_rare_pitches:
+    if GROUP_RARE_PITCHES and game_split_enabled:
         train, _, _ = split_indices(outcome_rows, with_validation=False)
         fit_counts = outcome_rows.iloc[train]["pitch_type_original"].value_counts()
         print("\n===== 랭커 적합 경기의 pitch_type 분포 =====")

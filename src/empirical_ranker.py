@@ -36,6 +36,21 @@ def candidate_zones(train_df):
     )
 
 
+def top_pitch_types(pitches):
+    """Select the three most frequent recommendable pitch types."""
+    return [pitch for pitch in pitches.value_counts().index if pitch != "OTHER"][:3]
+
+
+def select_candidate_pitches(lstm_pitches, pitcher_pitches, global_pitches, supported):
+    """Keep LSTM then pitcher order, with global pitches as the last fallback."""
+    for pitches in ((*lstm_pitches, *pitcher_pitches), global_pitches):
+        normalized = (str(pitch).strip().upper() for pitch in pitches)
+        candidates = list(dict.fromkeys(pitch for pitch in normalized if pitch in supported))
+        if candidates:
+            return candidates
+    return []
+
+
 def build_stat_tables(train_df, *, normalize_key_value=None):
     """Aggregate each tier, optionally normalizing keys for artifact storage."""
     tables = {}

@@ -1,5 +1,7 @@
 import time
 import platform
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import numpy as np
 import pandas as pd
@@ -15,12 +17,14 @@ if __package__:
     from . import training_features as features
     from . import training_helpers as training
     from .run_paths import run_directory
-    from .game_split import split_indices
+    from .game_split import GAME_SPLIT_HASH_COL, read_split_manifest, split_indices, split_manifest_hash
+    from .make_sequence import FORCE_OTHER_PITCHES
 else:
     import training_features as features
     import training_helpers as training
     from run_paths import run_directory
-    from game_split import split_indices
+    from game_split import GAME_SPLIT_HASH_COL, read_split_manifest, split_indices, split_manifest_hash
+    from make_sequence import FORCE_OTHER_PITCHES
 
 
 # =========================
@@ -216,7 +220,8 @@ def main():
     if sort_cols:
         df = df.sort_values(sort_cols).reset_index(drop=True)
 
-    train, valid, test = split_indices(df)
+    manifest = read_split_manifest()
+    train, valid, test = split_indices(df, manifest_bytes=manifest)
     train_df = df.iloc[train].copy()
     valid_df = df.iloc[valid].copy()
     test_df = df.iloc[test].copy()
@@ -237,9 +242,14 @@ def main():
     target_classes = sorted(train_df[features.TARGET_COL].dropna().unique().tolist())
     target_to_idx = {label: idx for idx, label in enumerate(target_classes)}
     idx_to_target = {idx: label for label, idx in target_to_idx.items()}
+    history_other_pitches = []
+    if "target_pitch_type_original" in train_df:
+        mapped = train_df.loc[train_df[features.TARGET_COL].eq("OTHER"), "target_pitch_type_original"]
+        history_other_pitches = sorted(FORCE_OTHER_PITCHES | (set(mapped.dropna()) - {"OTHER"}))
 
     valid_df = features.filter_evaluation_targets(valid_df, target_classes, "Validation")
-    test_df = features.filter_evaluation_targets(test_df, target_classes, "Test")
+    all_test_df = test_df
+    test_df = features.filter_evaluation_targets(all_test_df, target_classes, "Test", require_rows=False)
 
     print("\n===== 클래스 목록 =====")
     print(target_classes)
@@ -473,6 +483,7 @@ def main():
                     "pitcher_vocab": pitcher_vocab,
                     "stand_vocab": stand_vocab,
                     "throws_vocab": throws_vocab,
+                    "history_other_pitches": history_other_pitches,
                     "numeric_cols": features.NUMERIC_COLS,
 
                     "scaler_mean": scaler.mean_.astype(float).tolist(),
@@ -509,14 +520,18 @@ def main():
     checkpoint = safe_torch_load(MODEL_PATH, device)
     model.load_state_dict(checkpoint["model_state_dict"])
 
-    test_metrics, true_names, pred_names, top3_names = training.evaluate(
-        model=model,
-        loader=test_loader,
-        criterion=criterion,
-        device=device,
-        idx_to_target=idx_to_target,
-        return_predictions=True,
-    )
+    if len(test_dataset):
+        test_metrics, true_names, pred_names, top3_names = training.evaluate(
+            model=model,
+            loader=test_loader,
+            criterion=criterion,
+            device=device,
+            idx_to_target=idx_to_target,
+            return_predictions=True,
+        )
+    else:
+        test_metrics = dict.fromkeys(("loss", "accuracy", "top3_accuracy", "macro_f1", "weighted_f1"), np.nan)
+        true_names, pred_names, top3_names = [], [], []
 
     total_time = time.perf_counter() - total_start_time
 
@@ -552,12 +567,32 @@ def main():
 
     result_df.to_csv(RESULT_PATH, index=False, encoding="utf-8-sig")
 
-    pred_df = test_df.copy().reset_index(drop=True)
+    pred_df = test_df.copy()
     pred_df["true_pitch_type"] = true_names
     pred_df["pred_pitch_type"] = pred_names
     pred_df["top3_pitch_type"] = ["|".join(x) for x in top3_names]
 
-    pred_df.to_csv(PRED_PATH, index=False, encoding="utf-8-sig")
+    unscored = all_test_df.drop(index=test_df.index).copy()
+    if not unscored.empty:
+        inference_dataset = training.PitchSequenceDataset(
+            unscored, pitch_vocab, zone_vocab, pitcher_vocab, stand_vocab, throws_vocab,
+            target_to_idx, scaler, include_labels=False,
+        )
+        inference_loader = DataLoader(inference_dataset, batch_size=BATCH_SIZE, shuffle=False)
+        names, candidates = training.predict_names(model, inference_loader, device, idx_to_target)
+        unscored["true_pitch_type"] = unscored[features.TARGET_COL]
+        unscored["pred_pitch_type"] = names
+        unscored["top3_pitch_type"] = ["|".join(items) for items in candidates]
+        pred_df["included_in_test_metrics"] = True
+        unscored["included_in_test_metrics"] = False
+        pred_df = pd.concat([pred_df, unscored]).sort_index()
+    if manifest is not None:
+        pred_df[GAME_SPLIT_HASH_COL] = split_manifest_hash(manifest)
+
+    with TemporaryDirectory(prefix=".predictions-", dir=PRED_PATH.parent) as temporary:
+        staged = Path(temporary) / PRED_PATH.name
+        pred_df.to_csv(staged, index=False, encoding="utf-8-sig")
+        staged.replace(PRED_PATH)
 
     report_dict = classification_report(
         true_names,
@@ -565,7 +600,7 @@ def main():
         labels=target_classes,
         output_dict=True,
         zero_division=0,
-    )
+    ) if true_names else {}
 
     report_df = pd.DataFrame(report_dict).T
     report_df.to_csv(REPORT_PATH, encoding="utf-8-sig")

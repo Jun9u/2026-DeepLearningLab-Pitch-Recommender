@@ -6,7 +6,7 @@ import pickle
 import numpy as np
 import torch
 
-from src.empirical_ranker import score_action
+from src.empirical_ranker import score_action, select_candidate_pitches
 from src.train_lstm import load_serving_model
 from src.training_features import encode_numeric_features
 from .pitch_inputs import clean_pitch_token, encode_category, encode_pitch_history, normalize_zone
@@ -64,6 +64,7 @@ class PitchRecommendationService:
         self.pitcher_vocab = self.lstm_artifact["pitcher_vocab"]
         self.stand_vocab = self.lstm_artifact["stand_vocab"]
         self.throws_vocab = self.lstm_artifact["throws_vocab"]
+        self.history_other_pitches = frozenset(self.lstm_artifact.get("history_other_pitches", ()))
 
         self.target_to_idx = self.lstm_artifact["target_to_idx"]
         self.idx_to_target = self.lstm_artifact["idx_to_target"]
@@ -127,6 +128,7 @@ class PitchRecommendationService:
     def predict_lstm_topk(self, req: RecommendRequest, k=3):
         seq_pitch, seq_zone = encode_pitch_history(
             req.prev_pitch_types, req.prev_zones, self.pitch_vocab, self.zone_vocab,
+            other_pitches=self.history_other_pitches,
         )
 
         numeric_values = encode_numeric_features(req, self.scaler_mean, self.scaler_scale)
@@ -208,49 +210,12 @@ class PitchRecommendationService:
             if candidate_pitches:
                 return candidate_pitches
 
-        # 1. 직접 후보가 없으면 LSTM Top-3 사용
-        for item in lstm_top3:
-            p = clean_pitch_token(item["pitch_type"])
-
-            if p is None:
-                continue
-
-            if p not in self.supported_pitch_types:
-                continue
-
-            if p not in candidate_pitches:
-                candidate_pitches.append(p)
-
-        # 2. 해당 투수의 주 구종 fallback 추가
-        pitcher_top = self.pitcher_top_pitches.get(int(req.pitcher), [])
-
-        for p in pitcher_top:
-            p = clean_pitch_token(p)
-
-            if p is None:
-                continue
-
-            if p not in self.supported_pitch_types:
-                continue
-
-            if p not in candidate_pitches:
-                candidate_pitches.append(p)
-
-        # 3. 그래도 비면 전체 top pitch
-        if not candidate_pitches:
-            for p in self.global_top_pitches:
-                p = clean_pitch_token(p)
-
-                if p is None:
-                    continue
-
-                if p not in self.supported_pitch_types:
-                    continue
-
-                if p not in candidate_pitches:
-                    candidate_pitches.append(p)
-
-        return candidate_pitches
+        return select_candidate_pitches(
+            (item["pitch_type"] for item in lstm_top3),
+            self.pitcher_top_pitches.get(int(req.pitcher), []),
+            self.global_top_pitches,
+            self.supported_pitch_types,
+        )
 
     def recommend(self, req: RecommendRequest):
         lstm_top3 = self.predict_lstm_topk(req, k=3)

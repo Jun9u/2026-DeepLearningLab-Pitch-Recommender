@@ -59,6 +59,8 @@ class PitchSequenceDataset(Dataset):
         target_to_idx,
         scaler,
         max_len=features.HISTORY_LENGTH,
+        *,
+        include_labels=True,
     ):
         self.df = df.reset_index(drop=True)
 
@@ -70,9 +72,12 @@ class PitchSequenceDataset(Dataset):
         self.target_to_idx = target_to_idx
         self.scaler = scaler
         self.max_len = max_len
+        self.include_labels = include_labels
 
         numeric_data = self.df[features.NUMERIC_COLS].astype(float).values
-        self.numeric = self.scaler.transform(numeric_data).astype(np.float32)
+        if len(numeric_data):
+            numeric_data = self.scaler.transform(numeric_data)
+        self.numeric = numeric_data.astype(np.float32)
 
     def __len__(self):
         return len(self.df)
@@ -100,17 +105,18 @@ class PitchSequenceDataset(Dataset):
         stand = features.encode_category(row[features.STAND_COL], self.stand_vocab)
         p_throws = features.encode_category(row[features.THROWS_COL], self.throws_vocab)
 
-        label = self.target_to_idx[row[features.TARGET_COL]]
-
-        return {
+        batch = {
             "seq_pitch": torch.tensor(seq_pitch, dtype=torch.long),
             "seq_zone": torch.tensor(seq_zone, dtype=torch.long),
             "numeric": torch.tensor(self.numeric[idx], dtype=torch.float32),
             "pitcher": torch.tensor(pitcher, dtype=torch.long),
             "stand": torch.tensor(stand, dtype=torch.long),
             "p_throws": torch.tensor(p_throws, dtype=torch.long),
-            "label": torch.tensor(label, dtype=torch.long),
         }
+        if self.include_labels:
+            label = self.target_to_idx[row[features.TARGET_COL]]
+            batch["label"] = torch.tensor(label, dtype=torch.long)
+        return batch
 
 
 def train_one_epoch(model, loader, criterion, optimizer, device):
@@ -153,6 +159,24 @@ def train_one_epoch(model, loader, criterion, optimizer, device):
     return total_loss / total_count
 
 
+def inference_logits(model, batch, device):
+    fields = ("seq_pitch", "seq_zone", "numeric", "pitcher", "stand", "p_throws")
+    return model(**{field: batch[field].to(device) for field in fields})
+
+
+def predict_names(model, loader, device, idx_to_target):
+    model.eval()
+    predictions = []
+    candidates = []
+    with torch.no_grad():
+        for batch in loader:
+            logits = inference_logits(model, batch, device)
+            predictions.extend(idx_to_target[index] for index in logits.argmax(dim=1).tolist())
+            top3 = logits.topk(k=min(3, logits.size(1)), dim=1).indices.tolist()
+            candidates.extend([idx_to_target[index] for index in row] for row in top3)
+    return predictions, candidates
+
+
 def evaluate(model, loader, criterion, device, idx_to_target, return_predictions=False):
     model.eval()
 
@@ -165,22 +189,8 @@ def evaluate(model, loader, criterion, device, idx_to_target, return_predictions
 
     with torch.no_grad():
         for batch in loader:
-            seq_pitch = batch["seq_pitch"].to(device)
-            seq_zone = batch["seq_zone"].to(device)
-            numeric = batch["numeric"].to(device)
-            pitcher = batch["pitcher"].to(device)
-            stand = batch["stand"].to(device)
-            p_throws = batch["p_throws"].to(device)
             labels = batch["label"].to(device)
-
-            logits = model(
-                seq_pitch=seq_pitch,
-                seq_zone=seq_zone,
-                numeric=numeric,
-                pitcher=pitcher,
-                stand=stand,
-                p_throws=p_throws,
-            )
+            logits = inference_logits(model, batch, device)
 
             loss = criterion(logits, labels)
 
