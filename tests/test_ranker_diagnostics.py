@@ -142,3 +142,24 @@ class RankerDiagnosticsTests(unittest.TestCase):
         self.assertEqual(report["lstm_top3_join"], {"matched_rows": 0, "missing_rows": 1, "match_rate": 0.0})
         for metrics in report["observed_action_metrics"].values():
             self.assertIsNone(metrics["r2"])
+
+    def test_constant_targets_use_null_r2_for_matching_and_different_scores(self):
+        aligned = recommender.regression_metrics([0.2, 0.2], [0.2, 0.2])
+        self.assertTrue(pd.isna(aligned["r2"]))
+        self.assertEqual(aligned["mae"], 0)
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            rows = sparse_outcome_rows()[:10]
+            for row in rows[-2:]:
+                row["delta_run_exp"] = 0.2
+            write_csv(root, "data/processed/outcome_sequence_data.csv", rows)
+            command(root, self.script, "--diagnostics")
+            report = json.loads((root / "results/outcome_empirical_diagnostics.json").read_text(encoding="utf-8"))
+            evaluation = pd.read_csv(root / "results/outcome_empirical_eval.csv")
+
+        self.assertEqual(report["test_rows"], 2)
+        self.assertTrue(pd.isna(evaluation.iloc[0]["r2"]))
+        for metrics in report["observed_action_metrics"].values():
+            self.assertIsNone(metrics["r2"])
+            self.assertGreater(metrics["mae"], 0)
