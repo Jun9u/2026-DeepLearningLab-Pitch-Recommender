@@ -2,6 +2,7 @@
 
 PITCH_ORDER = ["game_date", "game_pk", "at_bat_number", "pitch_number"]
 AT_BAT_KEY = ["game_pk", "at_bat_number"]
+PITCH_KEY = [*AT_BAT_KEY, "pitch_number"]
 HISTORY_LENGTH = 5
 PITCH_PAD = "PAD"
 ZONE_PAD = "ZPAD"
@@ -9,6 +10,20 @@ ZONE_PAD = "ZPAD"
 
 def sort_pitches(frame):
     return frame.sort_values(PITCH_ORDER).reset_index(drop=True)
+
+
+def unique_pitches(frame):
+    """Collapse identical pitch rows and report conflicting versions of a pitch."""
+    repeated = frame.duplicated(PITCH_KEY, keep=False)
+    if not repeated.any():
+        return frame
+
+    distinct = frame.loc[repeated].drop_duplicates()
+    conflicts = distinct.loc[distinct.duplicated(PITCH_KEY, keep=False), PITCH_KEY]
+    if not conflicts.empty:
+        example = conflicts.iloc[0].to_dict()
+        raise ValueError(f"같은 투구 키에 서로 다른 행이 있습니다: {example}")
+    return frame.drop_duplicates(PITCH_KEY)
 
 
 def add_runner_flags(frame):

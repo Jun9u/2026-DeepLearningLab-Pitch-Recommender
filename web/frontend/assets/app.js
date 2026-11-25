@@ -113,6 +113,10 @@
       el.className = `message show ${type}`;
     }
 
+    function showResultMessage(text, warnings = []) {
+      showMessage([text, ...warnings].join(" "), warnings.length ? "warn" : "ok");
+    }
+
     function clearMessage() {
       const el = document.getElementById("message");
       el.textContent = "";
@@ -286,8 +290,7 @@
     }
 
     function zoneSubLabel(zone) {
-      if (["Z1","Z2","Z3","Z4","Z5","Z6","Z7","Z8","Z9"].includes(zone)) return "스트라이크";
-      return "볼";
+      return ZONE_LAYOUT_PITCHER_VIEW[zone].type === "inside" ? "존 안쪽" : "존 바깥쪽";
     }
 
     function renderZoneBoard(focusZone) {
@@ -450,7 +453,7 @@
         renderRecommendationTable(data.recommendations || []);
         renderZoneBoard();
         document.getElementById("rawJson").textContent = JSON.stringify(data, null, 2);
-        showMessage("추천 결과를 생성했습니다.", "ok");
+        showResultMessage("추천 결과를 생성했습니다.", data.warnings);
       } catch (err) {
         if (version !== requestVersion) return;
         showMessage("서버와 통신하는 중 오류가 발생했습니다. FastAPI 서버가 실행 중인지 확인해 주세요.", "error");
@@ -484,7 +487,7 @@
         renderComparison(data);
         renderZoneBoard();
         document.getElementById("rawJson").textContent = JSON.stringify(data, null, 2);
-        showMessage("직접 선택 비교를 완료했습니다.", "ok");
+        showResultMessage("직접 선택 비교를 완료했습니다.", data.warnings);
       } catch (err) {
         if (version !== requestVersion) return;
         showMessage("서버와 통신하는 중 오류가 발생했습니다. FastAPI 서버가 실행 중인지 확인해 주세요.", "error");

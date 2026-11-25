@@ -223,12 +223,21 @@ with patch("pybaseball.statcast", return_value=pd.read_csv("fixture.csv")) as st
 
         _, manual = request(base, "/recommend", {**REQUEST, "candidate_pitch_types": [" ch ", "X", "CH"]})
         self.assertEqual(manual["candidate_pitches"], ["CH"])
+        self.assertFalse(manual["warnings"])
         status, fallback = request(base, "/recommend", {
             **REQUEST, "candidate_pitch_types": ["X"], "prev_pitch_types": [], "prev_zones": [],
         })
         self.assertEqual(status, 200)
         self.assertTrue(fallback["recommendations"])
         self.assertIn("이전 투구 정보가 없습니다", fallback["warnings"][0])
+        warning = "수동 후보에 지원하는 구종이 없어 자동으로 후보를 선택했습니다."
+        self.assertEqual(fallback["warnings"][1:], [warning])
+        status, fallback_comparison = request(base, "/compare", {
+            **REQUEST, "candidate_pitch_types": ["X"], "action_pitch_type": "FF", "action_zone": "Z5",
+        })
+        self.assertEqual(status, 200)
+        self.assertIsNotNone(fallback_comparison["best_recommendation"])
+        self.assertEqual(fallback_comparison["warnings"], [warning])
         mismatched = {**REQUEST, "prev_zones": []}
         for path, payload in (
             ("/recommend", mismatched),

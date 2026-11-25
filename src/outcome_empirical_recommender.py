@@ -95,10 +95,16 @@ def parse_top3(text):
 
 
 def regression_metrics(y_true, y_pred):
+    mae = mean_absolute_error(y_true, y_pred)
+    rmse = math.sqrt(mean_squared_error(y_true, y_pred))
+    observed = np.asarray(y_true)
+    r2 = math.nan
+    if len(observed) > 1 and np.any(observed != observed[0]):
+        r2 = r2_score(observed, y_pred, force_finite=False)
     return {
-        "mae": mean_absolute_error(y_true, y_pred),
-        "rmse": math.sqrt(mean_squared_error(y_true, y_pred)),
-        "r2": r2_score(y_true, y_pred),
+        "mae": mae,
+        "rmse": rmse,
+        "r2": r2,
     }
 
 
