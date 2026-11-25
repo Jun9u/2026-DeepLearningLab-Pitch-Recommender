@@ -7,11 +7,11 @@ import numpy as np
 if __package__:
     from .game_split import split_indices
     from .run_paths import run_directory
-    from .sequence_helpers import add_runner_flags, iter_pitch_histories, left_pad as left_pad
+    from .sequence_helpers import add_runner_flags, iter_pitch_histories, left_pad as left_pad, unique_pitches
 else:
     from game_split import split_indices
     from run_paths import run_directory
-    from sequence_helpers import add_runner_flags, iter_pitch_histories, left_pad as left_pad
+    from sequence_helpers import add_runner_flags, iter_pitch_histories, left_pad as left_pad, unique_pitches
 
 
 # =========================
@@ -84,6 +84,7 @@ def main(*, train_only_rare_pitches=False, keep_unlabeled_history=False):
     print("===== 원본 크기 =====")
     print(df.shape)
 
+    df = unique_pitches(df)
     df["delta_run_exp"] = pd.to_numeric(df["delta_run_exp"], errors="coerce")
 
     required = ["pitch_type"] if keep_unlabeled_history else ["pitch_type", "zone", "delta_run_exp"]

@@ -3,11 +3,11 @@ import pandas as pd
 if __package__:
     from .game_split import split_indices
     from .run_paths import run_directory
-    from .sequence_helpers import iter_pitch_histories, left_pad as left_pad, sort_pitches
+    from .sequence_helpers import iter_pitch_histories, left_pad as left_pad, sort_pitches, unique_pitches
 else:
     from game_split import split_indices
     from run_paths import run_directory
-    from sequence_helpers import iter_pitch_histories, left_pad as left_pad, sort_pitches
+    from sequence_helpers import iter_pitch_histories, left_pad as left_pad, sort_pitches, unique_pitches
 
 RUN_DIR = run_directory()
 INPUT_PATH = RUN_DIR / "data/processed/clean_pitch_data.csv"
@@ -68,6 +68,7 @@ def main():
     if missing:
         raise ValueError(f"필수 컬럼 누락: {missing}")
 
+    df = unique_pitches(df)
     df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
     df["pitch_type"] = df["pitch_type"].astype(str)
     df["zone_token"] = df["zone"].apply(zone_to_token)

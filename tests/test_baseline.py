@@ -5,7 +5,7 @@ import unittest
 
 import pandas as pd
 
-from tests.support import PUBLIC_RESULTS, REPO, pitch, run_step, sparse_outcome_rows, write_csv
+from tests.support import PUBLIC_RESULTS, REPO, pitch, run_cli_in_process, run_step, sparse_outcome_rows, write_csv
 
 
 
@@ -44,6 +44,47 @@ class BaselineTests(unittest.TestCase):
             self.assertEqual(outcome["action_pitch_type_original"].tolist(), targets)
             self.assertEqual(outcome["action_pitch_type"].tolist(), ["SL"] * 499 + ["FF"] * 500 + ["OTHER"] * 501)
             self.assertTrue(outcome["seq_pitch_type"].eq("PAD|PAD|PAD|PAD|SL").all())
+
+    def test_duplicate_pitches_are_removed_before_building_histories(self):
+        rows = [pitch(1, index, code) for index, code in enumerate(("SL", "FF", "CH"), start=1)]
+        sequence_steps = {
+            "make_sequence": "sequence_data.csv",
+            "make_outcome_sequence": "outcome_sequence_data.csv",
+        }
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+
+            def prepare(data):
+                write_csv(root, "data/raw/savant_data.csv", data)
+                write_csv(root, "data/raw/savant_data_with_outcome.csv", data)
+                run_cli_in_process(root, "preprocess")
+
+            def build(step):
+                if step == "make_sequence":
+                    run_step(root, step)
+                else:
+                    run_cli_in_process(root, step)
+
+            prepare(rows)
+            for step in sequence_steps:
+                build(step)
+            outputs = {step: root / "data/processed" / name for step, name in sequence_steps.items()}
+            originals = {step: path.read_bytes() for step, path in outputs.items()}
+
+            prepare([*rows, rows[1]])
+            for step, path in outputs.items():
+                with self.subTest(step=step):
+                    build(step)
+                    self.assertEqual(path.read_bytes(), originals[step])
+
+            prepare([*rows, {**rows[1], "pitch_type": "CU"}])
+            for step, path in outputs.items():
+                with self.subTest(step=step):
+                    error_type = AssertionError if step == "make_sequence" else ValueError
+                    with self.assertRaisesRegex(error_type, "같은 투구 키에 서로 다른 행"):
+                        build(step)
+                    self.assertEqual(path.read_bytes(), originals[step])
 
     def test_middle_pitch_with_missing_outcome_is_removed_only_from_outcome_history(self):
         rows = [pitch(1, number, "FF", zone=number) for number in range(1, 9)]
