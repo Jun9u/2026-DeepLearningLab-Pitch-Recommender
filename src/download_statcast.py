@@ -126,6 +126,9 @@ def main(start_date=None, end_date=None):
         # 정규시즌만 사용할 경우
         df = df[df["game_type"] == "R"].copy()
 
+    if df.empty:
+        raise ValueError(f"Statcast 정규시즌 투구가 없습니다 ({start_date}~{end_date}).")
+
     print("\n===== 정규시즌 필터링 후 크기 =====")
     print(df.shape)
 

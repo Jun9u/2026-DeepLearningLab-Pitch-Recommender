@@ -2,7 +2,10 @@ import sys
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import pytest
+
 from src import export_serving_artifacts as exporter
+from src.serving_paths import CURRENT, GENERATIONS, serving_artifact_paths
 from tests.support import write_csv
 
 
@@ -45,3 +48,36 @@ def test_export_restores_legacy_scaler_in_feature_order(tmp_path, monkeypatch):
     assert serving_artifact["numeric_cols"] == columns[::-1]
     assert serving_artifact["scaler_mean"] == [2, 0.5, 2, 4, 0.5, 1, 0]
     assert serving_artifact["scaler_scale"] == [1, 0.5, 1, 1, 0.5, 1, 1]
+
+
+def test_failed_export_keeps_the_previously_published_pair(monkeypatch, tmp_path):
+    monkeypatch.setattr(exporter, "RUN_DIR", tmp_path)
+
+    def write_classifier(path):
+        path.parent.mkdir()
+        path.write_bytes(b"classifier")
+
+    monkeypatch.setattr(exporter, "export_lstm_serving_artifact", write_classifier)
+    monkeypatch.setattr(exporter, "export_outcome_ranker_artifact", lambda path: path.write_bytes(b"new ranker"))
+    monkeypatch.setattr(exporter, "safe_torch_load", Mock())
+    monkeypatch.setitem(sys.modules, "src.train_lstm", SimpleNamespace(load_serving_model=Mock()))
+    models = tmp_path / "models"
+
+    exporter.main()
+    previous_pair = serving_artifact_paths(models)
+    generation = (models / CURRENT).read_text()
+    saved_bytes = tuple(path.read_bytes() for path in previous_pair)
+    assert saved_bytes == (b"classifier", b"new ranker")
+
+    def fail(path):
+        path.write_bytes(b"incomplete ranker")
+        raise OSError("ranker export failed")
+
+    monkeypatch.setattr(exporter, "export_outcome_ranker_artifact", fail)
+    with pytest.raises(OSError, match="ranker export failed"):
+        exporter.main()
+
+    assert serving_artifact_paths(models) == previous_pair
+    assert (models / CURRENT).read_text() == generation
+    assert tuple(path.read_bytes() for path in previous_pair) == saved_bytes
+    assert list((models / GENERATIONS).iterdir()) == [previous_pair[0].parent]
