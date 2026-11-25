@@ -46,7 +46,13 @@ class BaselineTests(unittest.TestCase):
             self.assertTrue(outcome["seq_pitch_type"].eq("PAD|PAD|PAD|PAD|SL").all())
 
     def test_duplicate_pitches_are_removed_before_building_histories(self):
-        rows = [pitch(1, index, code) for index, code in enumerate(("SL", "FF", "CH"), start=1)]
+        first_at_bat = [pitch(1, index, code) for index, code in enumerate(("SL", "FF", "CH"), start=1)]
+        # The duplicated second pitch would raise the ranker's FF count from 499 to 500.
+        rows = first_at_bat + [
+            pitch(at_bat, number, "FF")
+            for at_bat in range(2, 251)
+            for number in (1, 2)
+        ]
         sequence_steps = {
             "make_sequence": "sequence_data.csv",
             "make_outcome_sequence": "outcome_sequence_data.csv",
@@ -71,6 +77,9 @@ class BaselineTests(unittest.TestCase):
                 build(step)
             outputs = {step: root / "data/processed" / name for step, name in sequence_steps.items()}
             originals = {step: path.read_bytes() for step, path in outputs.items()}
+            outcome = pd.read_csv(outputs["make_outcome_sequence"])
+            original_fastballs = outcome.loc[outcome["action_pitch_type_original"].eq("FF"), "action_pitch_type"]
+            self.assertEqual(set(original_fastballs), {"OTHER"})
 
             prepare([*rows, rows[1]])
             for step, path in outputs.items():
