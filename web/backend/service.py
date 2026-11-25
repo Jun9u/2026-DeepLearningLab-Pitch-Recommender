@@ -13,6 +13,9 @@ from .pitch_inputs import clean_pitch_token, encode_category, encode_pitch_histo
 from .schemas import CompareRequest, RecommendRequest, req_to_dict
 
 
+MANUAL_CANDIDATE_FALLBACK_WARNING = "수동 후보에 지원하는 구종이 없어 자동으로 후보를 선택했습니다."
+
+
 class RankerArtifactUnpickler(pickle.Unpickler):
     """Read the ranker's built-in containers without resolving Python classes."""
 
@@ -189,7 +192,7 @@ class PitchRecommendationService:
     # --------------------------------------------------------
     # Final recommendation
     # --------------------------------------------------------
-    def build_candidate_pitches(self, req: RecommendRequest, lstm_top3):
+    def build_candidate_pitches(self, req: RecommendRequest, lstm_top3, *, warnings=None):
         candidate_pitches = []
 
         # 0. 사용자가 후보 구종을 직접 넣은 경우: 강한 제약으로 사용
@@ -209,6 +212,8 @@ class PitchRecommendationService:
             # 사용자가 직접 후보를 넣은 경우에는 pitcher fallback을 추가하지 않음
             if candidate_pitches:
                 return candidate_pitches
+            if warnings is not None:
+                warnings.append(MANUAL_CANDIDATE_FALLBACK_WARNING)
 
         return select_candidate_pitches(
             (item["pitch_type"] for item in lstm_top3),
@@ -220,7 +225,12 @@ class PitchRecommendationService:
     def recommend(self, req: RecommendRequest):
         lstm_top3 = self.predict_lstm_topk(req, k=3)
 
-        candidate_pitches = self.build_candidate_pitches(req, lstm_top3)
+        warning_messages = []
+        if len(req.prev_pitch_types) == 0:
+            warning_messages.append(
+                "이전 투구 정보가 없습니다. 현재 모델은 이전 투구 이력이 있는 상황에서 더 안정적으로 동작합니다."
+            )
+        candidate_pitches = self.build_candidate_pitches(req, lstm_top3, warnings=warning_messages)
 
         candidates = []
 
@@ -240,13 +250,6 @@ class PitchRecommendationService:
 
         candidates = sorted(candidates, key=lambda x: x["pred_delta_run_exp"])
         recommendations = candidates[: req.top_n]
-
-        warning_messages = []
-
-        if len(req.prev_pitch_types) == 0:
-            warning_messages.append(
-                "이전 투구 정보가 없습니다. 현재 모델은 이전 투구 이력이 있는 상황에서 더 안정적으로 동작합니다."
-            )
 
         return {
             "input": req_to_dict(req),
@@ -307,5 +310,8 @@ class PitchRecommendationService:
                 "selected_minus_best": float(score - best["pred_delta_run_exp"]),
                 "is_selected_better_or_equal": bool(score <= best["pred_delta_run_exp"]),
             }
+
+        if MANUAL_CANDIDATE_FALLBACK_WARNING in rec_result["warnings"]:
+            result["warnings"] = [MANUAL_CANDIDATE_FALLBACK_WARNING]
 
         return result

@@ -233,6 +233,7 @@
     }
     .message.show { display: block; }
     .message.ok { background: #ecfdf5; border: 1px solid #bbf7d0; color: #065f46; }
+    .message.warn { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
     .message.error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
 
     .pitch-checks { display: flex; flex-wrap: wrap; gap: 8px; }
