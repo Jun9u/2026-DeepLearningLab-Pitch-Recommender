@@ -7,7 +7,7 @@ import numpy as np
 import torch
 
 from src.empirical_ranker import score_action
-from src.train_lstm import LSTMPitchModel
+from src.train_lstm import load_serving_model
 from src.training_features import encode_numeric_features
 from .pitch_inputs import clean_pitch_token, encode_category, encode_pitch_history, normalize_zone
 from .schemas import CompareRequest, RecommendRequest, req_to_dict
@@ -79,19 +79,7 @@ class PitchRecommendationService:
 
         self.scaler_scale[self.scaler_scale == 0] = 1.0
 
-        # LSTM 모델 복원
-        self.model = LSTMPitchModel(
-            num_pitch_tokens=len(self.pitch_vocab),
-            num_zone_tokens=len(self.zone_vocab),
-            num_pitchers=len(self.pitcher_vocab),
-            num_stands=len(self.stand_vocab),
-            num_throws=len(self.throws_vocab),
-            num_numeric_features=len(self.numeric_cols),
-            num_classes=len(self.target_to_idx),
-        ).to(self.device)
-
-        self.model.load_state_dict(self.lstm_artifact["model_state_dict"])
-        self.model.eval()
+        self.model = load_serving_model(self.lstm_artifact, self.device)
 
         # -------------------------
         # Load outcome artifact

@@ -15,6 +15,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.run_paths import run_directory  # noqa: E402
+from src.serving_paths import serving_artifact_paths  # noqa: E402
 from web.backend.frontend import add_frontend_routes  # noqa: E402
 from web.backend.schemas import CompareRequest, RecommendRequest  # noqa: E402
 
@@ -24,8 +25,7 @@ from web.backend.schemas import CompareRequest, RecommendRequest  # noqa: E402
 # ============================================================
 
 RUN_DIR = run_directory(PROJECT_ROOT)
-LSTM_ARTIFACT_PATH = RUN_DIR / "models" / "lstm_serving_artifact.pt"
-OUTCOME_ARTIFACT_PATH = RUN_DIR / "models" / "outcome_ranker_artifact.pkl"
+MODELS_DIR = RUN_DIR / "models"
 
 FRONTEND_PATH = PROJECT_ROOT / "web" / "frontend" / "index.html"
 
@@ -36,7 +36,7 @@ FRONTEND_PATH = PROJECT_ROOT / "web" / "frontend" / "index.html"
 
 @asynccontextmanager
 async def lifespan(_app):
-    paths = (LSTM_ARTIFACT_PATH, OUTCOME_ARTIFACT_PATH)
+    paths = serving_artifact_paths(MODELS_DIR)
     missing_artifacts = [path.name for path in paths if not path.is_file()]
     service = None
     if not missing_artifacts:

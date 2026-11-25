@@ -5,6 +5,7 @@ import unittest
 
 import pandas as pd
 
+from src.serving_paths import serving_artifact_paths
 from tests.support import pipeline_pitches, run_step, write_csv
 
 
@@ -57,7 +58,8 @@ class GameSplitPipelineTests(unittest.TestCase):
             outcomes = pd.read_csv(root / "data/processed/outcome_sequence_data.csv")
             fit = outcomes.loc[~outcomes["game_pk"].isin(expected_test)]
             metrics = pd.read_csv(root / "results/outcome_empirical_eval.csv").iloc[0]
-            with (root / "models/outcome_ranker_artifact.pkl").open("rb") as stream:
+            _, ranker_path = serving_artifact_paths(root / "models")
+            with ranker_path.open("rb") as stream:
                 artifact = pickle.load(stream)
             self.assertAlmostEqual(metrics["global_mean"], fit["delta_run_exp"].mean())
             self.assertAlmostEqual(artifact["global_mean"], metrics["global_mean"])

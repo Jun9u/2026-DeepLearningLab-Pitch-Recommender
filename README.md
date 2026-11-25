@@ -252,7 +252,7 @@ LSTM과 Transformer는 검증·테스트의 정답 구종이 학습 클래스에
 
 ### 웹 서버 실행
 
-서버는 선택한 실행 경로의 `models/` 아래 `lstm_serving_artifact.pt`와 `outcome_ranker_artifact.pkl`을 시작할 때 로드합니다. 새 터미널에서 실행할 때는 수집·학습에 사용한 실행 경로를 다시 지정하세요.
+서버는 시작할 때 `models/serving-current`가 가리키는 `models/serving/<세대>/`의 LSTM과 랭커를 함께 로드합니다. 내보내기는 두 파일을 준비한 뒤 현재 세대를 교체합니다. 기존 실행 경로에 `serving-current`가 없으면 `models/` 바로 아래의 기존 파일 두 개를 읽습니다. 새 터미널에서는 수집·학습에 사용한 실행 경로를 다시 지정하세요.
 
 ```bash
 export PITCH_RUN_DIR="$PWD/runs/statcast"
@@ -315,8 +315,8 @@ uvicorn web.backend.app:app --reload --host 127.0.0.1 --port 8000
 | --- | --- |
 | `data/raw/`, `data/processed/` | 원본 CSV, 전처리 및 시퀀스 데이터 |
 | `models/lstm_weighted_macro_best.pt` | 학습된 LSTM 체크포인트 |
-| `models/lstm_serving_artifact.pt` | 웹 서빙용 LSTM artifact |
-| `models/outcome_ranker_artifact.pkl` | 웹 서빙용 경험적 통계 |
+| `models/serving/<세대>/lstm_serving_artifact.pt` | 웹 서빙용 LSTM artifact |
+| `models/serving/<세대>/outcome_ranker_artifact.pkl` | 웹 서빙용 경험적 통계 |
 | `results/lstm_weighted_macro_predictions.csv` | 테스트 구간 LSTM 예측 결과 |
 | `results/outcome_empirical_recommendations.csv` | 테스트 구간 추천 상세 결과 |
 

@@ -17,7 +17,7 @@ class AppReadinessTests(unittest.IsolatedAsyncioTestCase):
         root = Path(self.enterContext(TemporaryDirectory()))
         self.lstm = root / "lstm_serving_artifact.pt"
         self.outcome = root / "outcome_ranker_artifact.pkl"
-        self.enterContext(patch.multiple(api, LSTM_ARTIFACT_PATH=self.lstm, OUTCOME_ARTIFACT_PATH=self.outcome))
+        self.enterContext(patch.object(api, "MODELS_DIR", root))
         self.loader = Mock()
         service_module = SimpleNamespace(PitchRecommendationService=self.loader)
         self.enterContext(patch.dict(sys.modules, {"web.backend.service": service_module}))

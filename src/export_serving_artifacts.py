@@ -1,4 +1,9 @@
+import math
+from pathlib import Path
 import pickle
+import shutil
+from tempfile import TemporaryDirectory
+from uuid import uuid4
 
 import numpy as np
 import pandas as pd
@@ -7,11 +12,13 @@ if __package__:
     from . import empirical_ranker as ranker
     from .game_split import split_indices
     from .run_paths import run_directory
+    from .serving_paths import CURRENT, GENERATIONS, LSTM_NAME, OUTCOME_NAME
     from .training_features import NUMERIC_COLS
 else:
     import empirical_ranker as ranker
     from game_split import split_indices
     from run_paths import run_directory
+    from serving_paths import CURRENT, GENERATIONS, LSTM_NAME, OUTCOME_NAME
     from training_features import NUMERIC_COLS
 
 
@@ -21,10 +28,10 @@ else:
 
 RUN_DIR = run_directory()
 LSTM_CHECKPOINT_PATH = RUN_DIR / "models/lstm_weighted_macro_best.pt"
-LSTM_SERVING_PATH = RUN_DIR / "models/lstm_serving_artifact.pt"
+LSTM_SERVING_PATH = RUN_DIR / "models" / LSTM_NAME
 
 OUTCOME_PATH = RUN_DIR / "data/processed/outcome_sequence_data.csv"
-OUTCOME_ARTIFACT_PATH = RUN_DIR / "models/outcome_ranker_artifact.pkl"
+OUTCOME_ARTIFACT_PATH = RUN_DIR / "models" / OUTCOME_NAME
 
 SEQUENCE_PATH = RUN_DIR / "data/processed/sequence_data.csv"
 
@@ -86,7 +93,7 @@ def compute_scaler_from_sequence_data():
     return mean.astype(float).tolist(), scale.astype(float).tolist()
 
 
-def export_lstm_serving_artifact():
+def export_lstm_serving_artifact(destination=None):
     import torch
 
     if not LSTM_CHECKPOINT_PATH.exists():
@@ -124,14 +131,15 @@ def export_lstm_serving_artifact():
     if missing:
         raise ValueError(f"LSTM checkpoint에 서빙 필수 정보가 없습니다. 누락: {missing}")
 
-    LSTM_SERVING_PATH.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(checkpoint, LSTM_SERVING_PATH)
+    path = LSTM_SERVING_PATH if destination is None else destination
+    path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(checkpoint, path)
 
     print("===== LSTM serving artifact 저장 완료 =====")
-    print(LSTM_SERVING_PATH)
+    print(path)
 
 
-def export_outcome_ranker_artifact():
+def export_outcome_ranker_artifact(destination=None):
     if not OUTCOME_PATH.exists():
         raise FileNotFoundError(f"파일이 없습니다: {OUTCOME_PATH}")
 
@@ -149,6 +157,8 @@ def export_outcome_ranker_artifact():
     train_df = df.iloc[train].copy()
 
     global_mean = float(train_df[ranker.TARGET_COL].mean())
+    if not math.isfinite(global_mean):
+        raise ValueError("랭커 적합 구간의 기대득점 평균을 계산할 수 없습니다.")
 
     print("\n===== Outcome artifact 생성 =====")
     print("전체:", df.shape)
@@ -192,13 +202,14 @@ def export_outcome_ranker_artifact():
         "stats": stats,
     }
 
-    OUTCOME_ARTIFACT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    path = OUTCOME_ARTIFACT_PATH if destination is None else destination
+    path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(OUTCOME_ARTIFACT_PATH, "wb") as f:
+    with path.open("wb") as f:
         pickle.dump(artifact, f)
 
     print("\n===== Outcome ranker artifact 저장 완료 =====")
-    print(OUTCOME_ARTIFACT_PATH)
+    print(path)
     print("valid_zones:", valid_zones)
     print("global_top_pitches:", global_top_pitches)
 
@@ -208,8 +219,36 @@ def export_outcome_ranker_artifact():
 
 
 def main():
-    export_lstm_serving_artifact()
-    export_outcome_ranker_artifact()
+    models_dir = RUN_DIR / "models"
+    generations = models_dir / GENERATIONS
+    generations.mkdir(parents=True, exist_ok=True)
+    generation = uuid4().hex
+    published = generations / generation
+
+    with TemporaryDirectory(prefix=".serving-", dir=models_dir) as temporary:
+        staging = Path(temporary)
+        bundle = staging / "bundle"
+        lstm = bundle / LSTM_NAME
+        export_lstm_serving_artifact(lstm)
+        export_outcome_ranker_artifact(bundle / OUTCOME_NAME)
+
+        if __package__:
+            from .train_lstm import load_serving_model
+        else:
+            from train_lstm import load_serving_model
+
+        load_serving_model(safe_torch_load(lstm), "cpu")
+        pointer = staging / CURRENT
+        pointer.write_text(generation + "\n", encoding="utf-8")
+        bundle.rename(published)
+        try:
+            pointer.replace(models_dir / CURRENT)
+        except OSError:
+            shutil.rmtree(published)
+            raise
+
+    print("===== 서빙 모델 쌍 게시 완료 =====")
+    print(published)
 
 
 if __name__ == "__main__":

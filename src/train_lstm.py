@@ -166,6 +166,20 @@ class LSTMPitchModel(nn.Module):
         return logits
 
 
+def load_serving_model(artifact, device):
+    model = LSTMPitchModel(
+        num_pitch_tokens=len(artifact["pitch_vocab"]),
+        num_zone_tokens=len(artifact["zone_vocab"]),
+        num_pitchers=len(artifact["pitcher_vocab"]),
+        num_stands=len(artifact["stand_vocab"]),
+        num_throws=len(artifact["throws_vocab"]),
+        num_numeric_features=len(artifact["numeric_cols"]),
+        num_classes=len(artifact["target_to_idx"]),
+    ).to(device)
+    model.load_state_dict(artifact["model_state_dict"])
+    return model.eval()
+
+
 # =========================
 # main
 # =========================
