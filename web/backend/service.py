@@ -262,7 +262,7 @@ class PitchRecommendationService:
 
     def compare(self, req: CompareRequest):
         pitch = clean_pitch_token(req.action_pitch_type)
-        zone = normalize_zone(req.action_zone)
+        zone = normalize_zone(req.action_zone, require_integral=True)
 
         if pitch is None:
             return {

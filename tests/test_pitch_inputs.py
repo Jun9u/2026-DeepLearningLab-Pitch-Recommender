@@ -31,6 +31,12 @@ class PitchInputTests(unittest.TestCase):
             with self.subTest(zone=zone):
                 self.assertEqual(normalize_zone(zone), "ZUNK")
 
+    def test_fractional_zones_cannot_be_scored_as_integer_zones(self):
+        self.assertEqual(normalize_zone("1.0", require_integral=True), "Z1")
+        self.assertEqual(normalize_zone("1.9", require_integral=True), "ZUNK")
+        self.assertEqual(normalize_zone("1.00000000000000000001", require_integral=True), "ZUNK")
+        self.assertEqual(normalize_zone("1.9"), "Z1")
+
     def test_serving_encoders_keep_padding_and_unknown_ids(self):
         vocab = {"ZPAD": 0, "ZUNK": 1, "Z1": 2, "Z2": 3}
         options = {"max_len": 3, "pad_token": "ZPAD", "unk_token": "ZUNK"}

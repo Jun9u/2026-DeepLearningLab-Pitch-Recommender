@@ -1,9 +1,11 @@
 """Normalize and encode pitch inputs for serving."""
 
+from decimal import Decimal, InvalidOperation
+
 from src.sequence_helpers import HISTORY_LENGTH, left_pad
 
 
-def normalize_zone(z):
+def normalize_zone(z, *, require_integral=False):
     """
     입력 zone을 모델에서 쓰는 Z1, Z2 ... 형태로 통일.
     """
@@ -19,8 +21,12 @@ def normalize_zone(z):
         return z
 
     try:
+        if require_integral:
+            exact_value = Decimal(z)
+            if not exact_value.is_finite() or exact_value != exact_value.to_integral_value():
+                return "ZUNK"
         return f"Z{int(float(z))}"
-    except (ValueError, OverflowError):
+    except (InvalidOperation, ValueError, OverflowError):
         return "ZUNK"
 
 
