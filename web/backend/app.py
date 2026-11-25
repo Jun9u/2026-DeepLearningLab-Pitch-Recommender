@@ -3,7 +3,6 @@ from pathlib import Path
 import sys
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 
@@ -64,14 +63,6 @@ app = FastAPI(
     description="LSTM 기반 구종 후보 생성 + delta_run_exp 기반 zone 랭킹 추천 API",
     version="1.0.0",
     lifespan=lifespan,
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
 )
 
 add_frontend_routes(app, FRONTEND_PATH)

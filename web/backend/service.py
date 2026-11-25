@@ -13,11 +13,11 @@ from .pitch_inputs import clean_pitch_token, encode_category, encode_pitch_histo
 from .schemas import CompareRequest, RecommendRequest, req_to_dict
 
 
-def safe_torch_load(path: Path, device: torch.device):
-    try:
-        return torch.load(path, map_location=device, weights_only=False)
-    except TypeError:
-        return torch.load(path, map_location=device)
+class RankerArtifactUnpickler(pickle.Unpickler):
+    """Read the ranker's built-in containers without resolving Python classes."""
+
+    def find_class(self, module, name):
+        raise pickle.UnpicklingError(f"랭커 파일에 지원하지 않는 객체가 있습니다: {module}.{name}")
 
 
 class PitchRecommendationService:
@@ -39,7 +39,7 @@ class PitchRecommendationService:
         # -------------------------
         # Load LSTM artifact
         # -------------------------
-        self.lstm_artifact = safe_torch_load(lstm_artifact_path, self.device)
+        self.lstm_artifact = torch.load(lstm_artifact_path, map_location=self.device, weights_only=True)
 
         required_lstm_keys = [
             "model_state_dict",
@@ -86,7 +86,7 @@ class PitchRecommendationService:
         # Load outcome artifact
         # -------------------------
         with open(outcome_artifact_path, "rb") as f:
-            self.outcome_artifact = pickle.load(f)
+            self.outcome_artifact = RankerArtifactUnpickler(f).load()
 
         required_outcome_keys = [
             "global_mean",

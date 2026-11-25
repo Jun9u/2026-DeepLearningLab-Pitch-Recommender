@@ -1,4 +1,6 @@
+from io import BytesIO
 import json
+import pickle
 from pathlib import Path
 import shutil
 from tempfile import TemporaryDirectory
@@ -47,11 +49,27 @@ def request(base, path, payload=None):
 
 
 class BaselineIntegrationTests(unittest.TestCase):
+    def test_ranker_loader_accepts_containers_and_rejects_other_objects(self):
+        from web.backend.service import RankerArtifactUnpickler
+
+        expected = {"stats": {(1, "FF", "Z1"): {"count": 1, "mean": 0.2}}}
+        self.assertEqual(RankerArtifactUnpickler(BytesIO(pickle.dumps(expected))).load(), expected)
+        with self.assertRaises(pickle.UnpicklingError):
+            RankerArtifactUnpickler(BytesIO(pickle.dumps(Path("model")))).load()
+
     def test_missing_artifacts_leave_static_routes_available(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             stage_web(root)
             with api_server(root) as base:
+                preflight = Request(base + "/recommend", method="OPTIONS", headers={
+                    "Origin": "https://example.com", "Access-Control-Request-Method": "POST",
+                })
+                with self.assertRaises(HTTPError) as response:
+                    HTTP.open(preflight, timeout=10)
+                with response.exception as error:
+                    self.assertNotIn("Access-Control-Allow-Origin", error.headers)
+
                 for path in ("/", "/assets/styles.css", "/assets/app.js", "/docs"):
                     with self.subTest(path=path):
                         self.assertEqual(request(base, path)[0], 200)
