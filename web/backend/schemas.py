@@ -1,9 +1,12 @@
 """Request models shared by the HTTP routes and recommendation service."""
 
-from typing import Any, Dict, List, Optional, Self
+from typing import Annotated, Any, Dict, List, Optional, Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
+
+
+PitchToken = Annotated[str, StringConstraints(max_length=32)]
 
 
 class RecommendRequest(BaseModel):
@@ -22,17 +25,17 @@ class RecommendRequest(BaseModel):
     runner_3b: int = Field(default=0, ge=0, le=1)
 
     # 좌우 정보
-    stand: str = Field(default="R")      # batter side: R/L
-    p_throws: str = Field(default="R")   # pitcher hand: R/L
+    stand: str = Field(default="R", max_length=8)      # batter side: R/L
+    p_throws: str = Field(default="R", max_length=8)   # pitcher hand: R/L
 
     # 같은 타석 내 이전 투구 정보
     # 5개보다 적어도 됨. 서버에서 왼쪽 PAD 처리.
-    prev_pitch_types: List[str] = Field(default_factory=list)
-    prev_zones: List[str] = Field(default_factory=list)
+    prev_pitch_types: List[PitchToken] = Field(default_factory=list, max_length=64)
+    prev_zones: List[PitchToken] = Field(default_factory=list, max_length=64)
 
     # 사용자가 후보 구종을 직접 제한하고 싶을 때 사용
     # 예: ["FF", "SL", "CH"]
-    candidate_pitch_types: Optional[List[str]] = None
+    candidate_pitch_types: Optional[List[PitchToken]] = Field(default=None, max_length=32)
 
     # 최종 추천 개수
     top_n: int = Field(default=5, ge=1, le=20)
@@ -48,8 +51,8 @@ class RecommendRequest(BaseModel):
 
 
 class CompareRequest(RecommendRequest):
-    action_pitch_type: str
-    action_zone: str
+    action_pitch_type: PitchToken
+    action_zone: PitchToken
 
 
 def req_to_dict(req: RecommendRequest) -> Dict[str, Any]:

@@ -39,10 +39,7 @@ SEQUENCE_PATH = RUN_DIR / "data/processed/sequence_data.csv"
 def safe_torch_load(path):
     import torch
 
-    try:
-        return torch.load(path, map_location="cpu", weights_only=False)
-    except TypeError:
-        return torch.load(path, map_location="cpu")
+    return torch.load(path, map_location="cpu", weights_only=True)
 
 
 def normalize_key_value(x):

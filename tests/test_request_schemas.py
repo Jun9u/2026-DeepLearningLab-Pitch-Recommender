@@ -43,3 +43,13 @@ def test_rejects_unpaired_history(validate_request, history):
         validate_request(history)
 
     assert [error["type"] for error in exc.value.errors()] == ["pitch_history_length_mismatch"]
+
+
+@pytest.mark.parametrize("fields", [
+    {"prev_pitch_types": ["FF"] * 65, "prev_zones": ["Z1"] * 65},
+    {"candidate_pitch_types": ["FF"] * 33},
+    {"prev_pitch_types": ["F" * 33], "prev_zones": ["Z1"]},
+])
+def test_bounds_api_pitch_inputs(validate_request, fields):
+    with pytest.raises(ValidationError):
+        validate_request(fields)
