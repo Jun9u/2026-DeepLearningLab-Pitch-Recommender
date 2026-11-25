@@ -92,3 +92,24 @@ class AppReadinessTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(ValueError, "invalid artifact"):
             async with api.lifespan(api.app):
                 self.fail("Startup succeeded with a corrupt artifact")
+
+    async def test_health_rejects_a_loaded_model_without_recommendable_actions(self):
+        self.lstm.touch()
+        self.outcome.touch()
+        service = self.loader.return_value
+
+        for pitches, zones in (([], ["Z5"]), (["FF"], [])):
+            with self.subTest(pitches=pitches, zones=zones):
+                service.supported_pitch_types = pitches
+                service.valid_zones = zones
+                async with api.lifespan(api.app) as state:
+                    request = Request({"type": "http", "state": state})
+                    response = api.health(request)
+                    self.assertEqual(response.status_code, 503)
+                    self.assertEqual(json.loads(response.body), {
+                        "status": "not_ready", "missing_artifacts": [], "reason": "no_supported_actions",
+                    })
+                    with self.assertRaises(HTTPException) as captured:
+                        api.require_service(request)
+                    self.assertEqual(captured.exception.status_code, 503)
+                    self.assertIn("추천할 수 있는", captured.exception.detail)

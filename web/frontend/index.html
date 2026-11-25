@@ -51,34 +51,38 @@
           </div>
 
           <div class="field-grid">
-            <div class="field"><label>볼</label><input id="balls" type="number" min="0" max="3" step="1" inputmode="numeric" value="1" /></div>
-            <div class="field"><label>스트라이크</label><input id="strikes" type="number" min="0" max="2" step="1" inputmode="numeric" value="2" /></div>
-            <div class="field"><label>아웃카운트</label><input id="outs_when_up" type="number" min="0" max="2" step="1" inputmode="numeric" value="1" /></div>
-            <div class="field"><label>이닝</label><input id="inning" type="number" min="1" max="20" step="1" inputmode="numeric" value="7" /></div>
+            <div class="field"><label for="balls">볼</label><input id="balls" type="number" min="0" max="3" step="1" inputmode="numeric" value="1" /></div>
+            <div class="field"><label for="strikes">스트라이크</label><input id="strikes" type="number" min="0" max="2" step="1" inputmode="numeric" value="2" /></div>
+            <div class="field"><label for="outs_when_up">아웃카운트</label><input id="outs_when_up" type="number" min="0" max="2" step="1" inputmode="numeric" value="1" /></div>
+            <div class="field"><label for="inning">이닝</label><input id="inning" type="number" min="1" max="20" step="1" inputmode="numeric" value="7" /></div>
           </div>
 
           <div class="section-divider"></div>
 
           <div class="field-grid three">
-            <div class="field"><label>1루 주자</label><select id="runner_1b"><option value="0" selected>없음</option><option value="1">있음</option></select></div>
-            <div class="field"><label>2루 주자</label><select id="runner_2b"><option value="0">없음</option><option value="1" selected>있음</option></select></div>
-            <div class="field"><label>3루 주자</label><select id="runner_3b"><option value="0" selected>없음</option><option value="1">있음</option></select></div>
+            <div class="field"><label for="runner_1b">1루 주자</label><select id="runner_1b"><option value="0" selected>없음</option><option value="1">있음</option></select></div>
+            <div class="field"><label for="runner_2b">2루 주자</label><select id="runner_2b"><option value="0">없음</option><option value="1" selected>있음</option></select></div>
+            <div class="field"><label for="runner_3b">3루 주자</label><select id="runner_3b"><option value="0" selected>없음</option><option value="1">있음</option></select></div>
           </div>
 
           <div class="section-divider"></div>
 
           <div class="field-grid">
-            <div class="field"><label>타자 방향</label><select id="stand"><option value="R" selected>우타자</option><option value="L">좌타자</option></select></div>
-            <div class="field"><label>투수 손</label><select id="p_throws"><option value="R" selected>우투수</option><option value="L">좌투수</option></select></div>
-            <div class="field"><label>최종 추천 개수</label><input id="top_n" type="number" min="1" max="20" step="1" inputmode="numeric" value="5" /></div>
+            <div class="field"><label for="stand">타자 방향</label><select id="stand"><option value="R" selected>우타자</option><option value="L">좌타자</option></select></div>
+            <div class="field"><label for="p_throws">투수 손</label><select id="p_throws"><option value="R" selected>우투수</option><option value="L">좌투수</option></select></div>
+            <div class="field"><label for="top_n">최종 추천 개수</label><input id="top_n" type="number" min="1" max="20" step="1" inputmode="numeric" value="5" /></div>
           </div>
 
           <div class="section-divider"></div>
 
           <div class="field">
-            <label>후보 구종 제한</label>
+            <label for="candidateMode">추천 후보 선택</label>
+            <select id="candidateMode" onchange="updateCandidateMode()">
+              <option value="manual">직접 선택</option>
+              <option value="auto">자동 (LSTM 및 구종 빈도)</option>
+            </select>
             <div id="candidatePitchChecks" class="pitch-checks"></div>
-            <small>선택한 구종만 이전 투구 입력과 최종 추천 후보에 사용됩니다. 최소 1개 이상 선택해야 합니다.</small>
+            <small>직접 선택 모드에서는 추천 후보를 1개 이상 선택합니다. 이전 투구는 따로 입력합니다.</small>
           </div>
 
           <div class="info-box warn" style="margin-top: 16px;">
@@ -92,7 +96,7 @@
             <button class="btn-secondary" onclick="resetDemo()">예시값 초기화</button>
           </div>
 
-          <div id="message" class="message"></div>
+          <div id="message" class="message" role="status"></div>
         </div>
       </section>
 
@@ -189,7 +193,7 @@
           <div class="comparison-card">
             <h3 style="margin: 0 0 10px; font-size: 16px;">4. 직접 선택 비교</h3>
             <div class="field-grid">
-              <div class="field"><label>비교할 구종</label><select id="compare_pitch_type"></select></div>
+              <div class="field"><label for="compare_pitch_type">비교할 구종</label><select id="compare_pitch_type"></select></div>
               <div class="field"><label>비교할 위치</label><div class="zone-chip" id="compareZoneChip">Z13</div></div>
             </div>
             <div class="button-row">

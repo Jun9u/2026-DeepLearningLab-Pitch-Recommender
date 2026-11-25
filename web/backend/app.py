@@ -39,16 +39,22 @@ async def lifespan(_app):
     paths = serving_artifact_paths(MODELS_DIR)
     missing_artifacts = [path.name for path in paths if not path.is_file()]
     service = None
+    readiness_error = None
     if not missing_artifacts:
         from web.backend.service import PitchRecommendationService
 
         service = PitchRecommendationService(*paths)
-    yield {"service": service, "missing_artifacts": missing_artifacts}
+        if not service.supported_pitch_types or not service.valid_zones:
+            service = None
+            readiness_error = "no_supported_actions"
+    yield {"service": service, "missing_artifacts": missing_artifacts, "readiness_error": readiness_error}
 
 
 def require_service(request: Request):
     service = request.state.service
     if service is None:
+        if request.state.readiness_error == "no_supported_actions":
+            raise HTTPException(status_code=503, detail="모델에 추천할 수 있는 구종 또는 위치가 없습니다.")
         raise HTTPException(status_code=503, detail="서빙 모델 파일을 준비한 뒤 서버를 재시작하세요.")
     return service
 
@@ -80,10 +86,10 @@ def live():
 def health(request: Request):
     service = request.state.service
     if service is None:
-        return JSONResponse(
-            status_code=503,
-            content={"status": "not_ready", "missing_artifacts": request.state.missing_artifacts},
-        )
+        content = {"status": "not_ready", "missing_artifacts": request.state.missing_artifacts}
+        if request.state.readiness_error:
+            content["reason"] = request.state.readiness_error
+        return JSONResponse(status_code=503, content=content)
     return {
         "status": "ok",
         "device": str(service.device),

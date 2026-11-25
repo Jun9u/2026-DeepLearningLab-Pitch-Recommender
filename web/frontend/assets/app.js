@@ -1,6 +1,5 @@
-    const OUTCOME_TRAIN_ROWS = 1326278;
     const PITCH_TYPES = ["FF", "SI", "SL", "CH", "FC", "ST", "CU", "FS", "KC"];
-    const PITCH_TYPES_WITH_NONE = ["NONE", ...PITCH_TYPES];
+    const HISTORY_PITCH_TYPES = ["NONE", ...PITCH_TYPES, "OTHER"];
 
     const PITCH_LABELS = {
       NONE: "이전 투구 없음",
@@ -63,6 +62,7 @@
     let activeTarget = { type: "prev", index: 0 };
     let compareZone = "Z13";
     let lastRecommendData = null;
+    let requestVersion = 0;
 
     function createBatterSvg(side) {
       const mirrorClass = side === "L" ? "mirror" : "";
@@ -158,7 +158,7 @@
         }
       });
 
-      if (getCandidatePitchTypes().length === 0) {
+      if (manualCandidates() && getCandidatePitchTypes().length === 0) {
         errors.push("후보 구종을 최소 1개 이상 선택해 주세요.");
       }
 
@@ -206,14 +206,12 @@
       return Array.from(checks).map(x => x.value);
     }
 
-    function getAvailableCandidatePitches() {
-      return getCandidatePitchTypes();
+    function manualCandidates() {
+      return document.getElementById("candidateMode").value === "manual";
     }
 
-    function makePitchOptions(selected, includeNone = true) {
-      const chosen = getAvailableCandidatePitches();
-      const options = includeNone ? ["NONE", ...chosen] : chosen;
-      return options.map(p => `<option value="${p}" ${p === selected ? "selected" : ""}>${pitchOptionLabel(p)}</option>`).join("");
+    function makePitchOptions(selected) {
+      return HISTORY_PITCH_TYPES.map(p => `<option value="${p}" ${p === selected ? "selected" : ""}>${pitchOptionLabel(p)}</option>`).join("");
     }
 
     function renderCandidatePitchChecks() {
@@ -224,24 +222,17 @@
         const label = document.createElement("label");
         label.className = "pitch-check";
         label.innerHTML = `
-          <input type="checkbox" value="${p}" ${defaultChecked.has(p) ? "checked" : ""} onchange="handleCandidateChange()" />
+          <input type="checkbox" value="${p}" ${defaultChecked.has(p) ? "checked" : ""} />
           ${pitchLabel(p)} (${pitchEnglish(p)})
         `;
         box.appendChild(label);
       });
+      updateCandidateMode();
     }
 
-    function handleCandidateChange() {
-      const available = getAvailableCandidatePitches();
-      prevRows = prevRows.map(row => {
-        if (row.pitch !== "NONE" && !available.includes(row.pitch)) {
-          return { pitch: "NONE", zone: null };
-        }
-        return row;
-      });
-      renderPrevRows();
-      renderComparePitchOptions();
-      renderZoneBoard();
+    function updateCandidateMode() {
+      const manual = manualCandidates();
+      document.querySelectorAll('#candidatePitchChecks input').forEach(input => { input.disabled = !manual; });
     }
 
     function riskClass(value) {
@@ -333,6 +324,7 @@
     }
 
     function selectZone(zone) {
+      requestVersion += 1;
       if (activeTarget.type === "prev") {
         if (prevRows[activeTarget.index].pitch === "NONE") {
           showMessage("이전 투구 없음 항목에는 위치를 지정할 수 없습니다.", "error");
@@ -373,7 +365,7 @@
         const isNone = row.pitch === "NONE";
         div.innerHTML = `
           <div class="idx">${PREV_LABELS[idx]}</div>
-          <select onchange="updatePrevPitch(${idx}, this.value)">${makePitchOptions(row.pitch, true)}</select>
+          <select aria-label="${PREV_LABELS[idx]} 구종" onchange="updatePrevPitch(${idx}, this.value)">${makePitchOptions(row.pitch)}</select>
           <div class="zone-chip">${isNone ? "-" : row.zone}</div>
           <button class="${isActive ? "btn-primary" : "btn-ghost"}" onclick="setActivePrev(${idx}, event.detail === 0)" ${isNone ? "disabled" : ""}>위치 선택</button>
         `;
@@ -391,16 +383,9 @@
 
     function renderComparePitchOptions() {
       const select = document.getElementById("compare_pitch_type");
-      const options = getAvailableCandidatePitches();
+      const options = PITCH_TYPES;
       const prevValue = select.value;
 
-      if (options.length === 0) {
-        select.innerHTML = `<option value="">후보 구종을 먼저 선택하세요</option>`;
-        select.disabled = true;
-        return;
-      }
-
-      select.disabled = false;
       select.innerHTML = options.map(p => `<option value="${p}">${pitchLabel(p)} (${pitchEnglish(p)})</option>`).join("");
 
       if (options.includes(prevValue)) select.value = prevValue;
@@ -422,7 +407,7 @@
     }
 
     function buildPayload() {
-      const candidateInput = getCandidatePitchTypes();
+      const candidateInput = manualCandidates() ? getCandidatePitchTypes() : null;
       const validPrevRows = prevRows.filter(row => row.pitch && row.pitch !== "NONE" && row.zone);
       return {
         pitcher: Number(document.getElementById("pitcher").value),
@@ -444,6 +429,7 @@
     }
 
     async function recommend() {
+      const version = ++requestVersion;
       clearMessage();
       if (!validateInputs()) return;
 
@@ -452,6 +438,7 @@
       try {
         const res = await fetch("/recommend", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
         const data = await res.json();
+        if (version !== requestVersion) return;
 
         if (!res.ok) {
           showMessage(formatApiError(data), "error");
@@ -465,11 +452,13 @@
         document.getElementById("rawJson").textContent = JSON.stringify(data, null, 2);
         showMessage("추천 결과를 생성했습니다.", "ok");
       } catch (err) {
+        if (version !== requestVersion) return;
         showMessage("서버와 통신하는 중 오류가 발생했습니다. FastAPI 서버가 실행 중인지 확인해 주세요.", "error");
       }
     }
 
     async function compareAction() {
+      const version = ++requestVersion;
       clearMessage();
       if (!validateInputs()) return;
 
@@ -485,6 +474,7 @@
       try {
         const res = await fetch("/compare", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
         const data = await res.json();
+        if (version !== requestVersion) return;
 
         if (!res.ok || data.error) {
           showMessage(formatApiError(data), "error");
@@ -496,6 +486,7 @@
         document.getElementById("rawJson").textContent = JSON.stringify(data, null, 2);
         showMessage("직접 선택 비교를 완료했습니다.", "ok");
       } catch (err) {
+        if (version !== requestVersion) return;
         showMessage("서버와 통신하는 중 오류가 발생했습니다. FastAPI 서버가 실행 중인지 확인해 주세요.", "error");
       }
     }
@@ -567,7 +558,9 @@
         const res = await fetch("/health");
         const data = await res.json();
         if (res.status === 503 && data.status === "not_ready") {
-          healthText.textContent = "서빙 모델 파일을 준비한 뒤 서버를 재시작하세요.";
+          healthText.textContent = data.reason === "no_supported_actions"
+            ? "모델에 추천할 수 있는 구종 또는 위치가 없습니다."
+            : "서빙 모델 파일을 준비한 뒤 서버를 재시작하세요.";
           return;
         }
         if (!res.ok || data.status !== "ok") {
@@ -584,6 +577,14 @@
     }
 
     function resetDemo() {
+      requestVersion += 1;
+      lastRecommendData = null;
+      renderLstmTable([]);
+      renderRecommendationTable([]);
+      const comparison = document.getElementById("compareResult");
+      comparison.replaceChildren();
+      comparison.style.display = "none";
+      document.getElementById("rawJson").textContent = "아직 결과가 없습니다.";
       document.getElementById("balls").value = "1";
       document.getElementById("strikes").value = "2";
       document.getElementById("outs_when_up").value = "1";
@@ -594,6 +595,7 @@
       document.getElementById("stand").value = "R";
       document.getElementById("p_throws").value = "R";
       document.getElementById("top_n").value = "5";
+      document.getElementById("candidateMode").value = "manual";
       prevRows = JSON.parse(JSON.stringify(DEFAULT_PREV_ROWS));
       activeTarget = { type: "prev", index: 0 };
       compareZone = "Z13";
@@ -607,6 +609,7 @@
     }
 
     window.addEventListener("DOMContentLoaded", () => {
+      document.querySelector("main").addEventListener("input", () => { requestVersion += 1; });
       renderCandidatePitchChecks();
       renderPrevRows();
       renderComparePitchOptions();

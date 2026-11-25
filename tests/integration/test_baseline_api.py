@@ -236,6 +236,9 @@ with patch("pybaseball.statcast", return_value=pd.read_csv("fixture.csv")) as st
             ("FF", "Infinity", {
                 "error": "지원하지 않는 zone입니다.", "input_zone": "ZUNK", "valid_zones": meta["valid_zones"],
             }),
+            ("FF", "1.9", {
+                "error": "지원하지 않는 zone입니다.", "input_zone": "ZUNK", "valid_zones": meta["valid_zones"],
+            }),
         )
         for pitch, zone, error in invalid_actions:
             with self.subTest(pitch=pitch, zone=zone):
