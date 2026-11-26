@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+torch_requirement=$(sed -n '/^torch==/p' requirements.txt)
+python -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu "${torch_requirement}+cpu"
+python -m pip install --no-cache-dir -r requirements.txt
+python -m src.synthetic_demo --run-dir runs/synthetic-demo
+
+config_dir="${JUPYTER_CONFIG_DIR:-$HOME/.jupyter}"
+install -d "$config_dir"
+install -m 644 binder/jupyter_server_config.py "$config_dir/jupyter_server_config.py"
