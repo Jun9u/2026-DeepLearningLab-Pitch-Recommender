@@ -69,7 +69,7 @@
 - [x] **오프라인 랭커 프로파일링** 2주 경기 분할의 테스트 투구 8,282개에서 처리 시간 중앙값이 4.97초에서 3.66초로 줄었고, 평가·추천 CSV가 바이트 단위로 일치했습니다. [PR #19](https://github.com/Jun9u/2026-DeepLearningLab-Pitch-Recommender/pull/19)
 - [x] **수치 입력 순서와 최근 5구 공통화** 학습·내보내기·서빙의 수치 입력 순서와, 전처리·학습·서빙의 길이·패딩을 공유합니다. 2주 표본 체크포인트, 예측·추천과 API 응답을 변경 전과 대조했습니다. [PR #22](https://github.com/Jun9u/2026-DeepLearningLab-Pitch-Recommender/pull/22) · [PR #23](https://github.com/Jun9u/2026-DeepLearningLab-Pitch-Recommender/pull/23)
 - [x] **최종 보고서 파일명 정리** `docs/final_report.pdf`로 변경하고 README 링크 수정
-- [ ] **라이선스 여부 결정:** 현재 라이선스 파일이 없으므로 공개 저장소라는 이유만으로 타인의 재사용이 허용되는 것은 아닙니다. 배포 정책을 결정한 뒤 선택합니다.
+- [x] **코드 라이선스 지정** 자체 작성 코드와 합성 테스트에 [MIT 라이선스](../LICENSE)를 적용했습니다. [적용 범위](../README.md#라이선스)
 
 ## 현재 유지할 결정
 
