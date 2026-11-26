@@ -56,6 +56,13 @@ def test_count_zone_score_uses_pitch_zone_prior_and_fallbacks():
     assert score(123, 0, 2, "FF", "Z1", **settings) == (0.1, "action+zone", 40)
     assert score(123, 1, 2, "FF", "Z2", **settings) == (0.25, "global", 80)
 
+    settings["stats"]["count_action_zone"][(0, 2, "FF", "Z1")] = {"sum": 0.0, "count": 0}
+    settings["stats"]["count_action_zone"][(1, 2, "CH", "Z1")] = {"sum": 0.0, "count": 0}
+    settings["stats"]["action_zone"][("CH", "Z1")] = {"mean": math.nan, "count": 0}
+
+    assert score(123, 0, 2, "FF", "Z1", **settings) == (0.1, "action+zone", 40)
+    assert score(123, 1, 2, "CH", "Z1", **settings) == (0.25, "global", 80)
+
 
 def test_stat_tables_preserve_raw_keys_and_accept_artifact_normalization():
     frame = pd.DataFrame(

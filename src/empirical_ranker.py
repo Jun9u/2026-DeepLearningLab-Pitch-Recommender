@@ -103,12 +103,13 @@ def score_action(
 def score_count_zone(_pitcher, balls, strikes, pitch_type, zone, *, stats, global_mean, global_count, **_):
     """Pool count-specific observations toward the pitch and zone mean."""
     pair = stats["action_zone"].get((pitch_type, zone))
-    prior = global_mean if pair is None else pair["mean"]
+    has_pair_observations = pair is not None and pair["count"] > 0
+    prior = pair["mean"] if has_pair_observations else global_mean
     count_group = stats["count_action_zone"].get((balls, strikes, pitch_type, zone))
-    if count_group is not None:
+    if count_group is not None and count_group["count"] > 0:
         score = smoothed_mean(count_group["sum"], count_group["count"], prior, COUNT_ZONE_ALPHA)
         return score, "count+action+zone", count_group["count"]
-    if pair is not None:
+    if has_pair_observations:
         return prior, "action+zone", pair["count"]
     return prior, "global", global_count
 
