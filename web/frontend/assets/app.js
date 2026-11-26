@@ -570,6 +570,10 @@
           healthText.textContent = "서버 상태 확인 실패";
           return;
         }
+        if (data.data_source === "synthetic") {
+          document.getElementById("syntheticNotice").hidden = false;
+          document.getElementById("pitcher").value = data.example_pitcher;
+        }
         const pitchCount = (data.supported_pitch_types || []).length;
         healthText.innerHTML = `서버 정상 작동<br/>추천 엔진 준비 완료<br/>지원 구종 ${pitchCount}종`;
         document.getElementById("recommendButton").disabled = false;
