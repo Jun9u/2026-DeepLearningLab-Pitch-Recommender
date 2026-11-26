@@ -349,3 +349,9 @@ uvicorn web.backend.app:app --reload --host 127.0.0.1 --port 8000
 우선순위는 **재현 가능성 확보 → 실험 타당성 검토 → 코드 테스트 → 데모·문서 개선**입니다.
 
 구체적인 확인 사항과 개선 목록은 [프로젝트 정비 점검표](docs/MAINTENANCE.md)에 정리했습니다. 기존 기능과 실험 산출물을 보존하면서 단계적으로 개선할 계획입니다.
+
+## 라이선스
+
+[MIT 라이선스](LICENSE)는 `src/`, `web/`, `tests/`에 있는 이 프로젝트의 자체 작성 코드와 합성 테스트에 적용됩니다.
+
+MLB Statcast 데이터, 해당 데이터로 학습한 모델과 통계 파일, 실험 결과 CSV, 제출 문서와 이미지는 코드 라이선스 적용 범위에서 제외합니다. Statcast 데이터의 사용 조건은 [MLB 이용약관](https://www.mlb.com/official-information/terms-of-use)을 참고하세요.
