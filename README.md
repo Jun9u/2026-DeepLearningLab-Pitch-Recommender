@@ -130,7 +130,9 @@ MLB Statcast의 투구 단위 데이터를 이용해 **다음 구종 후보를 �
 
 ## 5. 웹 데모
 
-FastAPI 백엔드와 HTML·CSS·JavaScript로 구현한 **로컬 실행형** 데모입니다. 현재 저장소에는 공개 배포 URL이나 즉시 실행 가능한 학습 모델 파일이 없습니다.
+FastAPI 백엔드와 HTML·CSS·JavaScript로 구현한 데모입니다. 공개 링크를 열면 Binder가 임시 실행 세션을 시작합니다.
+
+[실제 Statcast 모델 데모](https://mybinder.org/v2/gh/Jun9u/2026-DeepLearningLab-Pitch-Recommender/main?urlpath=pitch-statcast%2F) · [합성 데이터 데모](https://mybinder.org/v2/gh/Jun9u/2026-DeepLearningLab-Pitch-Recommender/main?urlpath=pitch-demo%2F) · [Statcast 서빙 모델 다운로드](https://github.com/Jun9u/2026-DeepLearningLab-Pitch-Recommender/releases/tag/statcast-serving-2023-2025-v1)
 
 **지원 기능**
 
@@ -192,6 +194,19 @@ python -m pip install -r requirements.txt
 `PITCH_RUN_DIR`에 실행 경로를 지정하면 수집, 학습, 평가와 웹 서버가 그 아래의 `data/`, `models/`, `results/`를 함께 사용합니다. 아래 예시는 저장소 루트에서 실행하며, 같은 실험의 명령과 서버에 동일한 값을 사용합니다. 경로를 생략하면 스크립트는 현재 작업 디렉터리, 웹 서버는 저장소 루트에서 데이터 또는 모델 파일을 찾습니다.
 
 새 실험 결과는 `results/`에 저장됩니다. `outputs/`는 공개 실험 요약을 보관합니다. 오프라인 랭커는 `results/lstm_weighted_macro_predictions.csv`를 우선 읽고, 파일이 없으면 같은 실행 경로의 기존 `outputs/lstm_weighted_macro_predictions.csv`를 읽습니다.
+
+### 공개된 Statcast 모델로 로컬 실행
+
+[릴리스](https://github.com/Jun9u/2026-DeepLearningLab-Pitch-Recommender/releases/tag/statcast-serving-2023-2025-v1)에서 모델 압축 파일과 SHA-256 파일을 저장소 루트로 받습니다. 의존성을 설치한 뒤 서버를 실행합니다.
+
+```bash
+sha256sum -c statcast-serving-2023-2025.tar.gz.sha256 &&
+mkdir -p runs &&
+tar -xzf statcast-serving-2023-2025.tar.gz -C runs &&
+PITCH_RUN_DIR="$PWD/runs/statcast-serving-2023-2025" python -m uvicorn web.backend.app:app --host 127.0.0.1 --port 8000
+```
+
+압축 파일의 서빙 모델만으로 [웹 데모](http://127.0.0.1:8000)에서 추천과 비교를 실행할 수 있습니다. [학습 데이터 출처](https://baseballsavant.mlb.com/statcast_search)
 
 ### 합성 데이터로 웹 데모 실행
 
