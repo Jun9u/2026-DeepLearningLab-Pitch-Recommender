@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+export PITCH_RUN_DIR="$PWD/runs/statcast-serving-2023-2025"
+if [[ ! -d "$PITCH_RUN_DIR" ]]; then
+    mkdir -p "$(dirname "$PITCH_RUN_DIR")"
+    stage=$(mktemp -d "$(dirname "$PITCH_RUN_DIR")/.statcast-serving.XXXXXXXX")
+    trap 'rm -rf -- "$stage"' EXIT
+    asset=https://raw.githubusercontent.com/Jun9u/2026-DeepLearningLab-Pitch-Recommender/e3a6347b141342cc5023dbcd6aa5787129d96afe/statcast-serving-2023-2025.tar.gz
+    digest=8db689f4b29da5e994dd9a15c047ff88abbf937b92138fb54d9e0ae30b7d9589
+    curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+        --retry 2 --retry-max-time 30 --max-time 20 "$asset" -o "$stage/models.tar.gz"
+    printf '%s  %s\n' "$digest" "$stage/models.tar.gz" | sha256sum --check --status
+    mkdir "$stage/model"
+    tar -xzf "$stage/models.tar.gz" --strip-components=1 --no-same-owner -C "$stage/model"
+    (cd "$stage/model" && sha256sum --check --strict SHA256SUMS)
+    mv -T "$stage/model" "$PITCH_RUN_DIR"
+    rm -rf -- "$stage"
+    trap - EXIT
+fi
+
+exec python -m uvicorn web.backend.app:app --host 127.0.0.1 --port "$1" --limit-concurrency 16
