@@ -193,6 +193,26 @@ python -m pip install -r requirements.txt
 
 새 실험 결과는 `results/`에 저장됩니다. `outputs/`는 공개 실험 요약을 보관합니다. 오프라인 랭커는 `results/lstm_weighted_macro_predictions.csv`를 우선 읽고, 파일이 없으면 같은 실행 경로의 기존 `outputs/lstm_weighted_macro_predictions.csv`를 읽습니다.
 
+### 합성 데이터로 웹 데모 실행
+
+가상의 투구 3,600개를 생성해 LSTM과 랭커를 적합합니다. 의존성을 설치한 뒤에는 인터넷이나 Statcast 파일 없이 실행할 수 있습니다.
+
+```bash
+python -m src.synthetic_demo --run-dir runs/synthetic-demo
+PITCH_RUN_DIR="$PWD/runs/synthetic-demo" python -m uvicorn web.backend.app:app --host 127.0.0.1 --port 8000
+```
+
+브라우저에서 [웹 데모](http://127.0.0.1:8000)를 열고 **추천 받기**와 **직접 선택 비교**를 실행합니다. 화면에 합성 데이터 표시와 가상 투수가 설정됩니다. 다시 생성할 때는 새 실행 경로를 지정합니다. 추천 점수는 기능 체험용입니다.
+
+Linux x86-64에서 배포용 CPU 이미지를 생성하고 로컬에서 확인할 수도 있습니다.
+
+```bash
+docker build -f Dockerfile.demo -t pitch-synthetic-demo .
+docker run --rm -p 127.0.0.1:8000:8000 pitch-synthetic-demo
+```
+
+이미지는 빌드 중 생성한 합성 모델을 읽습니다. 외부에 배포하는 환경에서는 HTTPS와 요청 제한을 구성하고 `/health`를 준비 상태 확인 경로로 사용합니다.
+
 ### 2주치 Statcast로 데모 실행
 
 아래 명령은 2025년 6월 1~14일 정규시즌 투구를 Baseball Savant에서 받아 LSTM과 경험적 랭커의 서빙 파일을 생성합니다. 데이터 수집에 인터넷 연결이 필요합니다. 저장소 루트에서 가상환경을 활성화하고 실행합니다.
@@ -352,6 +372,6 @@ uvicorn web.backend.app:app --reload --host 127.0.0.1 --port 8000
 
 ## 라이선스
 
-[MIT 라이선스](LICENSE)는 `src/`, `web/`, `tests/`에 있는 이 프로젝트의 자체 작성 코드와 합성 테스트에 적용됩니다.
+[MIT 라이선스](LICENSE)는 `src/`, `web/`, `tests/`에 있는 이 프로젝트의 자체 작성 코드와 합성 테스트, 합성 데모의 컨테이너 빌드 설정에 적용됩니다.
 
 MLB Statcast 데이터, 해당 데이터로 학습한 모델과 통계 파일, 실험 결과 CSV, 제출 문서와 이미지는 코드 라이선스 적용 범위에서 제외합니다. Statcast 데이터의 사용 조건은 [MLB 이용약관](https://www.mlb.com/official-information/terms-of-use)을 참고하세요.

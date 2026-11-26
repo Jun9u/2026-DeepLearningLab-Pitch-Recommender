@@ -1,0 +1,10 @@
+**
+!Dockerfile.demo
+!requirements.txt
+!LICENSE
+!src/
+!src/**
+!web/
+!web/**
+**/__pycache__/
+**/*.pyc

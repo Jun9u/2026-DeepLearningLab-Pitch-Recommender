@@ -1,0 +1,25 @@
+FROM python:3.12-slim-trixie AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
+    OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 OPENBLAS_NUM_THREADS=2 CUDA_VISIBLE_DEVICES=""
+WORKDIR /app
+COPY requirements.txt LICENSE ./
+RUN torch_requirement="$(sed -n '/^torch==/p' requirements.txt)" && \
+    python -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu "${torch_requirement}+cpu" && \
+    python -m pip install --no-cache-dir -r requirements.txt
+COPY src/ src/
+COPY web/ web/
+RUN chmod -R a+rX src web && chmod a+r LICENSE
+
+FROM runtime AS generated
+RUN --network=none python -m src.synthetic_demo --run-dir /tmp/synthetic-demo
+
+FROM runtime
+COPY --from=generated --chown=10001:10001 /tmp/synthetic-demo/models/serving/ /app/demo/models/serving/
+COPY --from=generated --chown=10001:10001 /tmp/synthetic-demo/models/serving-current /app/demo/models/serving-current
+COPY --from=generated --chown=10001:10001 /tmp/synthetic-demo/synthetic-demo /app/demo/synthetic-demo
+RUN chmod -R a-w /app/demo
+ENV PITCH_RUN_DIR=/app/demo
+USER 10001:10001
+EXPOSE 8000
+CMD ["python", "-m", "uvicorn", "web.backend.app:app", "--host", "0.0.0.0", "--port", "8000"]

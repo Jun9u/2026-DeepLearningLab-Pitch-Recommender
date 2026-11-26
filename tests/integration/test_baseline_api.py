@@ -163,6 +163,33 @@ with patch("pybaseball.statcast", return_value=pd.read_csv("fixture.csv")) as st
                 {file.name: file.read_bytes() for file in published.glob("*.csv")}, published_contents,
             )
 
+    def test_standalone_synthetic_demo(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            run_dir = root / "demo"
+            command(REPO, "-m", "src.synthetic_demo", "--run-dir", str(run_dir),
+                    run_directory=root / "unrelated", game_split=root / "wrong.csv")
+            self.assertFalse((root / "unrelated").exists())
+            with self.assertRaisesRegex(AssertionError, "Use a new run directory"):
+                command(REPO, "-m", "src.synthetic_demo", "--run-dir", str(run_dir))
+
+            stage_web(root)
+            with api_server(root, run_directory=run_dir) as base:
+                status, health = request(base, "/health")
+                self.assertEqual(status, 200)
+                self.assertEqual(health["data_source"], "synthetic")
+                status, meta = request(base, "/meta")
+                self.assertEqual(status, 200)
+                self.assertEqual(meta["data_source"], "synthetic")
+                payload = meta["request_example"]
+                self.assertEqual(payload["pitcher"], health["example_pitcher"])
+                status, recommendations = request(base, "/recommend", {**payload, "candidate_pitch_types": None})
+                self.assertEqual(status, 200)
+                self.assertEqual(len(recommendations["recommendations"]), payload["top_n"])
+                status, comparison = request(base, "/compare", {**payload, "action_pitch_type": "FF", "action_zone": "Z13"})
+                self.assertEqual(status, 200)
+                self.assertEqual(comparison["selected_action"]["zone"], "Z13")
+
     def check_model_api(self, base):
         status, html = request(base, "/")
         self.assertEqual(status, 200)
@@ -180,8 +207,10 @@ with patch("pybaseball.statcast", return_value=pd.read_csv("fixture.csv")) as st
         self.assertEqual(request(base, "/live"), (200, {"status": "ok"}))
         status, health = request(base, "/health")
         self.assertEqual((status, health["status"]), (200, "ok"))
+        self.assertNotIn("data_source", health)
         self.assertEqual(health["num_pitchers_outcome"], 4)
         _, meta = request(base, "/meta")
+        self.assertNotIn("data_source", meta)
         self.assertEqual(set(meta["supported_pitch_types"]), {"FF", "SL", "CH"})
         self.assertEqual(meta["valid_zones"], [f"Z{zone}" for zone in range(1, 10)])
         _, schema = request(base, "/openapi.json")

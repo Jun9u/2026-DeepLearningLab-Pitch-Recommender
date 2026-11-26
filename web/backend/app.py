@@ -15,6 +15,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.run_paths import run_directory  # noqa: E402
 from src.serving_paths import serving_artifact_paths  # noqa: E402
+from src.synthetic_pitches import DEMO_MARKER, EXAMPLE_PITCHER  # noqa: E402
 from web.backend.frontend import add_frontend_routes  # noqa: E402
 from web.backend.schemas import CompareRequest, RecommendRequest  # noqa: E402
 
@@ -25,6 +26,7 @@ from web.backend.schemas import CompareRequest, RecommendRequest  # noqa: E402
 
 RUN_DIR = run_directory(PROJECT_ROOT)
 MODELS_DIR = RUN_DIR / "models"
+SYNTHETIC_DEMO = (RUN_DIR / DEMO_MARKER).is_file()
 
 FRONTEND_PATH = PROJECT_ROOT / "web" / "frontend" / "index.html"
 
@@ -83,6 +85,7 @@ def health(request: Request):
         return JSONResponse(status_code=503, content=content)
     return {
         "status": "ok",
+        **({"data_source": "synthetic", "example_pitcher": EXAMPLE_PITCHER} if SYNTHETIC_DEMO else {}),
         "device": str(service.device),
         "num_pitchers_lstm_vocab": len(service.pitcher_vocab),
         "num_pitchers_outcome": len(service.pitcher_top_pitches),
@@ -95,13 +98,14 @@ def health(request: Request):
 def meta(request: Request):
     service = require_service(request)
     return {
+        **({"data_source": "synthetic"} if SYNTHETIC_DEMO else {}),
         "valid_zones": service.valid_zones,
         "supported_pitch_types": service.supported_pitch_types,
         "global_top_pitches": service.global_top_pitches,
         "supported_stand": list(service.stand_vocab.keys()),
         "supported_p_throws": list(service.throws_vocab.keys()),
         "request_example": {
-            "pitcher": 622503,
+            "pitcher": EXAMPLE_PITCHER if SYNTHETIC_DEMO else 622503,
             "batter": None,
             "balls": 1,
             "strikes": 2,
