@@ -15,7 +15,8 @@ if [[ ! -d "$PITCH_RUN_DIR" ]]; then
     mkdir "$stage/model"
     tar -xzf "$stage/models.tar.gz" --strip-components=1 --no-same-owner -C "$stage/model"
     (cd "$stage/model" && sha256sum --check --strict SHA256SUMS)
-    mv -T "$stage/model" "$PITCH_RUN_DIR"
+    mv -nT "$stage/model" "$PITCH_RUN_DIR"
+    test -f "$PITCH_RUN_DIR/models/serving-current"
     rm -rf -- "$stage"
     trap - EXIT
 fi

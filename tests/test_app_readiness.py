@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
@@ -8,12 +9,15 @@ from unittest.mock import Mock, patch
 
 from fastapi import HTTPException, Request
 
+from src.empirical_ranker import COUNT_ZONE_MODE, EMPIRICAL_MODE
 from web.backend import app as api
 from web.backend.schemas import CompareRequest, RecommendRequest
 
 
 class AppReadinessTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
+        self.enterContext(patch.dict(os.environ))
+        os.environ.pop("PITCH_RANKER_MODE", None)
         root = Path(self.enterContext(TemporaryDirectory()))
         self.lstm = root / "lstm_serving_artifact.pt"
         self.outcome = root / "outcome_ranker_artifact.pkl"
@@ -66,9 +70,25 @@ class AppReadinessTests(unittest.IsolatedAsyncioTestCase):
             self.assertIs(api.recommend(recommendation, request), service.recommend.return_value)
             self.assertIs(api.compare(comparison, request), service.compare.return_value)
 
-        self.loader.assert_called_once_with(self.lstm, self.outcome)
+        self.loader.assert_called_once_with(self.lstm, self.outcome, ranker_mode=EMPIRICAL_MODE)
         service.recommend.assert_called_once_with(recommendation)
         service.compare.assert_called_once_with(comparison)
+
+    async def test_experimental_ranker_is_selected_on_startup_and_exposed_in_health(self):
+        os.environ["PITCH_RANKER_MODE"] = COUNT_ZONE_MODE
+        self.lstm.touch()
+        self.outcome.touch()
+        service = self.loader.return_value
+        service.pitcher_vocab = {}
+        service.pitcher_top_pitches = {}
+        service.supported_pitch_types = ["FF"]
+        service.valid_zones = ["Z5"]
+
+        async with api.lifespan(api.app) as state:
+            request = Request({"type": "http", "state": state})
+            self.assertEqual(api.health(request)["ranker_mode"], COUNT_ZONE_MODE)
+
+        self.loader.assert_called_once_with(self.lstm, self.outcome, ranker_mode=COUNT_ZONE_MODE)
 
     async def test_invalid_comparison_returns_422_with_service_error_body(self):
         body = {"error": "지원하지 않는 zone입니다.", "input_zone": "Z99", "valid_zones": ["Z5"]}

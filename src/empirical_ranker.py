@@ -1,6 +1,9 @@
 """Shared aggregation and scoring for the empirical outcome ranker."""
 
 TARGET_COL = "delta_run_exp"
+EMPIRICAL_MODE = "empirical"
+COUNT_ZONE_MODE = "count_zone"
+COUNT_ZONE_ALPHA = 25.0
 DEFAULT_ALPHA = 50.0
 DEFAULT_THRESHOLDS = {
     "pitcher_count_action_zone": 5,
@@ -95,3 +98,24 @@ def score_action(
             return score, table.replace("_", "+"), stat["count"]
 
     return global_mean, "global", global_count
+
+
+def score_count_zone(_pitcher, balls, strikes, pitch_type, zone, *, stats, global_mean, global_count, **_):
+    """Pool count-specific observations toward the pitch and zone mean."""
+    pair = stats["action_zone"].get((pitch_type, zone))
+    prior = global_mean if pair is None else pair["mean"]
+    count_group = stats["count_action_zone"].get((balls, strikes, pitch_type, zone))
+    if count_group is not None:
+        score = smoothed_mean(count_group["sum"], count_group["count"], prior, COUNT_ZONE_ALPHA)
+        return score, "count+action+zone", count_group["count"]
+    if pair is not None:
+        return prior, "action+zone", pair["count"]
+    return prior, "global", global_count
+
+
+def scoring_function(mode):
+    if mode == EMPIRICAL_MODE:
+        return score_action
+    if mode == COUNT_ZONE_MODE:
+        return score_count_zone
+    raise ValueError(f"Unsupported ranker mode: {mode!r}")

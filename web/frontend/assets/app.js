@@ -574,6 +574,9 @@
           document.getElementById("syntheticNotice").hidden = false;
           document.getElementById("pitcher").value = data.example_pitcher;
         }
+        if (data.ranker_mode === "count_zone") {
+          document.getElementById("countZoneNotice").hidden = false;
+        }
         const pitchCount = (data.supported_pitch_types || []).length;
         healthText.innerHTML = `서버 정상 작동<br/>추천 엔진 준비 완료<br/>지원 구종 ${pitchCount}종`;
         document.getElementById("recommendButton").disabled = false;
