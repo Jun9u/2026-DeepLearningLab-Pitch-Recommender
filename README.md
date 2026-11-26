@@ -195,6 +195,8 @@ python -m pip install -r requirements.txt
 
 ### 합성 데이터로 웹 데모 실행
 
+[브라우저에서 합성 데모 열기](https://mybinder.org/v2/gh/Jun9u/2026-DeepLearningLab-Pitch-Recommender/main?urlpath=pitch-demo%2F). Binder가 임시 세션을 시작합니다. 첫 접속에서는 실행 환경을 준비하는 데 시간이 걸릴 수 있습니다.
+
 가상의 투구 3,600개를 생성해 LSTM과 랭커를 적합합니다. 의존성을 설치한 뒤에는 인터넷이나 Statcast 파일 없이 실행할 수 있습니다.
 
 ```bash

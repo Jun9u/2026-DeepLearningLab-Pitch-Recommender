@@ -439,7 +439,7 @@
       const payload = buildPayload();
 
       try {
-        const res = await fetch("/recommend", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+        const res = await fetch("recommend", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
         const data = await res.json();
         if (version !== requestVersion) return;
 
@@ -475,7 +475,7 @@
       }
 
       try {
-        const res = await fetch("/compare", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+        const res = await fetch("compare", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
         const data = await res.json();
         if (version !== requestVersion) return;
 
@@ -558,7 +558,7 @@
     async function loadHealth() {
       const healthText = document.getElementById("healthText");
       try {
-        const res = await fetch("/health");
+        const res = await fetch("health");
         const data = await res.json();
         if (res.status === 503 && data.status === "not_ready") {
           healthText.textContent = data.reason === "no_supported_actions"
