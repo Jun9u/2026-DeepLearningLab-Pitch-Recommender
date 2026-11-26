@@ -6,10 +6,14 @@ cpu_environment = {
     "MKL_NUM_THREADS": "2",
     "OPENBLAS_NUM_THREADS": "2",
 }
-statcast_demo = {
+empirical_statcast_demo = {
     "command": ["bash", str(Path.home() / "binder/statcast-demo"), "{port}"],
-    "environment": cpu_environment,
+    "environment": {**cpu_environment, "PITCH_RANKER_MODE": "empirical"},
     "timeout": 90,
+}
+count_zone_statcast_demo = {
+    **empirical_statcast_demo,
+    "environment": {**cpu_environment, "PITCH_RANKER_MODE": "count_zone"},
 }
 
 c.ServerProxy.servers = {
@@ -24,9 +28,7 @@ c.ServerProxy.servers = {
         },
         "timeout": 60,
     },
-    "pitch-statcast": statcast_demo,
-    "pitch-statcast-count": {
-        **statcast_demo,
-        "environment": {**cpu_environment, "PITCH_RANKER_MODE": "count_zone"},
-    },
+    "pitch-statcast": count_zone_statcast_demo,
+    "pitch-statcast-count": count_zone_statcast_demo,
+    "pitch-statcast-legacy": empirical_statcast_demo,
 }
