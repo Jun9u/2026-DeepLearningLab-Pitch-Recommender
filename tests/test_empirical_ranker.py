@@ -1,9 +1,13 @@
 import math
 
 import pandas as pd
+import pytest
 
 from src import outcome_empirical_recommender as recommender
-from src.empirical_ranker import DEFAULT_THRESHOLDS, build_stat_tables, candidate_zones, score_action
+from src.empirical_ranker import (
+    COUNT_ZONE_MODE, DEFAULT_THRESHOLDS, EMPIRICAL_MODE, build_stat_tables, candidate_zones, score_action,
+    scoring_function,
+)
 from tests.support import write_csv
 
 
@@ -31,6 +35,33 @@ def test_score_action_uses_each_tier_at_its_minimum_count():
     settings.update(global_count=0, thresholds={**DEFAULT_THRESHOLDS, "action": 49})
     assert score_action(123, 1, 2, "FF", "Z1", **settings)[1:] == ("action", 49)
     assert score_action(123, 1, 2, "CH", "Z1", **settings) == (0.25, "global", 0)
+
+
+def test_count_zone_score_uses_pitch_zone_prior_and_fallbacks():
+    score = scoring_function(COUNT_ZONE_MODE)
+    assert scoring_function(EMPIRICAL_MODE) is score_action
+    with pytest.raises(ValueError, match="Unsupported ranker mode"):
+        scoring_function("typo")
+
+    settings = {
+        "stats": {
+            "count_action_zone": {(1, 2, "FF", "Z1"): {"sum": 0.5, "count": 1}},
+            "action_zone": {("FF", "Z1"): {"mean": 0.1, "count": 40}},
+        },
+        "global_mean": 0.25, "global_count": 80,
+    }
+
+    assert score(123, 1, 2, "FF", "Z1", **settings) == (3 / 26, "count+action+zone", 1)
+    assert score(456, 1, 2, "FF", "Z1", **settings) == (3 / 26, "count+action+zone", 1)
+    assert score(123, 0, 2, "FF", "Z1", **settings) == (0.1, "action+zone", 40)
+    assert score(123, 1, 2, "FF", "Z2", **settings) == (0.25, "global", 80)
+
+    settings["stats"]["count_action_zone"][(0, 2, "FF", "Z1")] = {"sum": 0.0, "count": 0}
+    settings["stats"]["count_action_zone"][(1, 2, "CH", "Z1")] = {"sum": 0.0, "count": 0}
+    settings["stats"]["action_zone"][("CH", "Z1")] = {"mean": math.nan, "count": 0}
+
+    assert score(123, 0, 2, "FF", "Z1", **settings) == (0.1, "action+zone", 40)
+    assert score(123, 1, 2, "CH", "Z1", **settings) == (0.25, "global", 80)
 
 
 def test_stat_tables_preserve_raw_keys_and_accept_artifact_normalization():

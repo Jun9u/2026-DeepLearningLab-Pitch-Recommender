@@ -134,6 +134,8 @@ FastAPI 백엔드와 HTML·CSS·JavaScript로 구현한 데모입니다. 공개 
 
 [실제 Statcast 모델 데모](https://mybinder.org/v2/gh/Jun9u/2026-DeepLearningLab-Pitch-Recommender/main?urlpath=pitch-statcast%2F) · [합성 데이터 데모](https://mybinder.org/v2/gh/Jun9u/2026-DeepLearningLab-Pitch-Recommender/main?urlpath=pitch-demo%2F) · [Statcast 서빙 모델 다운로드](https://github.com/Jun9u/2026-DeepLearningLab-Pitch-Recommender/releases/tag/statcast-serving-2023-2025-v1)
 
+[실제 Statcast 모델 · 볼카운트 실험 랭커](https://mybinder.org/v2/gh/Jun9u/2026-DeepLearningLab-Pitch-Recommender/main?urlpath=pitch-statcast-count%2F)는 같은 LSTM과 후보 구종을 사용합니다. 볼카운트별 구종·위치 평균을 표본 수에 따라 보정해 순위를 계산합니다. 로컬에서 시험하려면 서버를 시작할 때 `PITCH_RANKER_MODE=count_zone`을 추가합니다.
+
 **지원 기능**
 
 1. 고정 예시 투수의 투수·타자 좌우, 볼카운트, 아웃카운트, 주자·이닝 상황 입력

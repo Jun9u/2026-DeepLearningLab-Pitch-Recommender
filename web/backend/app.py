@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import os
 from pathlib import Path
 import sys
 
@@ -13,6 +14,7 @@ from fastapi.responses import JSONResponse
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
+from src.empirical_ranker import COUNT_ZONE_MODE, EMPIRICAL_MODE  # noqa: E402
 from src.run_paths import run_directory  # noqa: E402
 from src.serving_paths import serving_artifact_paths  # noqa: E402
 from src.synthetic_pitches import DEMO_MARKER, EXAMPLE_PITCHER  # noqa: E402
@@ -37,6 +39,7 @@ FRONTEND_PATH = PROJECT_ROOT / "web" / "frontend" / "index.html"
 
 @asynccontextmanager
 async def lifespan(_app):
+    ranker_mode = os.environ.get("PITCH_RANKER_MODE", EMPIRICAL_MODE)
     paths = serving_artifact_paths(MODELS_DIR)
     missing_artifacts = [path.name for path in paths if not path.is_file()]
     service = None
@@ -44,11 +47,14 @@ async def lifespan(_app):
     if not missing_artifacts:
         from web.backend.service import PitchRecommendationService
 
-        service = PitchRecommendationService(*paths)
+        service = PitchRecommendationService(*paths, ranker_mode=ranker_mode)
         if not service.supported_pitch_types or not service.valid_zones:
             service = None
             readiness_error = "no_supported_actions"
-    yield {"service": service, "missing_artifacts": missing_artifacts, "readiness_error": readiness_error}
+    yield {
+        "service": service, "missing_artifacts": missing_artifacts,
+        "readiness_error": readiness_error, "ranker_mode": ranker_mode,
+    }
 
 
 def require_service(request: Request):
@@ -86,6 +92,7 @@ def health(request: Request):
     return {
         "status": "ok",
         **({"data_source": "synthetic", "example_pitcher": EXAMPLE_PITCHER} if SYNTHETIC_DEMO else {}),
+        **({"ranker_mode": COUNT_ZONE_MODE} if request.state.ranker_mode == COUNT_ZONE_MODE else {}),
         "device": str(service.device),
         "num_pitchers_lstm_vocab": len(service.pitcher_vocab),
         "num_pitchers_outcome": len(service.pitcher_top_pitches),

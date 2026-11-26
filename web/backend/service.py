@@ -6,7 +6,7 @@ import pickle
 import numpy as np
 import torch
 
-from src.empirical_ranker import score_action, select_candidate_pitches
+from src.empirical_ranker import EMPIRICAL_MODE, scoring_function, select_candidate_pitches
 from src.train_lstm import load_serving_model
 from src.training_features import encode_numeric_features
 from .pitch_inputs import clean_pitch_token, encode_category, encode_pitch_history, normalize_zone
@@ -24,7 +24,8 @@ class RankerArtifactUnpickler(pickle.Unpickler):
 
 
 class PitchRecommendationService:
-    def __init__(self, lstm_artifact_path: Path, outcome_artifact_path: Path):
+    def __init__(self, lstm_artifact_path: Path, outcome_artifact_path: Path, *, ranker_mode=EMPIRICAL_MODE):
+        self.score_action = scoring_function(ranker_mode)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         if not lstm_artifact_path.exists():
@@ -181,7 +182,7 @@ class PitchRecommendationService:
     # Outcome ranker
     # --------------------------------------------------------
     def _predict_delta(self, req: RecommendRequest, action_pitch_type: str, action_zone: str):
-        return score_action(
+        return self.score_action(
             int(req.pitcher), int(req.balls), int(req.strikes),
             str(action_pitch_type).upper(), str(action_zone).upper(),
             stats=self.stats, thresholds=self.outcome_artifact["thresholds"],
