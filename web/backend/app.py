@@ -18,6 +18,7 @@ from src.empirical_ranker import COUNT_ZONE_MODE, EMPIRICAL_MODE  # noqa: E402
 from src.run_paths import run_directory  # noqa: E402
 from src.serving_paths import serving_artifact_paths  # noqa: E402
 from src.synthetic_pitches import DEMO_MARKER, EXAMPLE_PITCHER  # noqa: E402
+from web.backend.body_limit import BODY_TOO_LARGE, PostBodyLimit  # noqa: E402
 from web.backend.frontend import add_frontend_routes  # noqa: E402
 from web.backend.schemas import CompareRequest, RecommendRequest  # noqa: E402
 
@@ -72,6 +73,7 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+app.add_middleware(PostBodyLimit)
 
 add_frontend_routes(app, FRONTEND_PATH)
 
@@ -131,7 +133,7 @@ def meta(request: Request):
     }
 
 
-@app.post("/recommend", responses={503: {"description": "서빙 모델 파일 준비 필요"}})
+@app.post("/recommend", responses={413: {"description": BODY_TOO_LARGE}, 503: {"description": "서빙 모델 파일 준비 필요"}})
 def recommend(req: RecommendRequest, request: Request):
     return require_service(request).recommend(req)
 
@@ -139,6 +141,7 @@ def recommend(req: RecommendRequest, request: Request):
 @app.post(
     "/compare",
     responses={
+        413: {"description": BODY_TOO_LARGE},
         422: {
             "description": "요청 형식 오류 또는 지원하지 않는 구종·위치",
             "content": {
