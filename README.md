@@ -200,9 +200,9 @@ python -m pip install -r requirements.txt
 [릴리스](https://github.com/Jun9u/2026-DeepLearningLab-Pitch-Recommender/releases/tag/statcast-serving-2023-2025-v1)에서 모델 압축 파일과 SHA-256 파일을 저장소 루트로 받습니다. 의존성을 설치한 뒤 서버를 실행합니다.
 
 ```bash
-sha256sum -c statcast-serving-2023-2025.tar.gz.sha256
-mkdir -p runs
-tar -xzf statcast-serving-2023-2025.tar.gz -C runs
+sha256sum -c statcast-serving-2023-2025.tar.gz.sha256 &&
+mkdir -p runs &&
+tar -xzf statcast-serving-2023-2025.tar.gz -C runs &&
 PITCH_RUN_DIR="$PWD/runs/statcast-serving-2023-2025" python -m uvicorn web.backend.app:app --host 127.0.0.1 --port 8000
 ```
 
