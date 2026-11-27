@@ -1,12 +1,13 @@
 import pandas as pd
 
 if __package__:
+    from .raw_statcast import MODEL_CSV, raw_statcast_directory
     from .run_paths import run_directory
 else:
+    from raw_statcast import MODEL_CSV, raw_statcast_directory
     from run_paths import run_directory
 
 RUN_DIR = run_directory()
-DATA_PATH = RUN_DIR / "data/raw/savant_data.csv"
 
 required_cols = [
     "pitch_type",
@@ -31,11 +32,12 @@ required_cols = [
 ]
 
 def main():
-    if not DATA_PATH.exists():
-        raise FileNotFoundError(f"파일이 없습니다: {DATA_PATH}")
+    data_path = raw_statcast_directory(RUN_DIR / "data/raw") / MODEL_CSV
+    if not data_path.exists():
+        raise FileNotFoundError(f"파일이 없습니다: {data_path}")
 
     # 전체 파일을 읽지 않고 컬럼만 확인
-    cols = pd.read_csv(DATA_PATH, nrows=0).columns.tolist()
+    cols = pd.read_csv(data_path, nrows=0).columns.tolist()
 
     print("===== 컬럼 수 =====")
     print(len(cols))
@@ -48,7 +50,7 @@ def main():
     print(missing)
 
     # 행 수 확인
-    with open(DATA_PATH, "rb") as f:
+    with open(data_path, "rb") as f:
         row_count = sum(1 for _ in f) - 1
 
     print("\n===== 행 수 =====")
@@ -56,7 +58,7 @@ def main():
 
     # 필요한 컬럼만 샘플 확인
     usecols = [c for c in required_cols if c in cols]
-    sample = pd.read_csv(DATA_PATH, usecols=usecols, nrows=5)
+    sample = pd.read_csv(data_path, usecols=usecols, nrows=5)
 
     print("\n===== 샘플 5행 =====")
     print(sample.to_string(index=False))

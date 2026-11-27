@@ -1,12 +1,13 @@
 import pandas as pd
 
 if __package__:
+    from .raw_statcast import MODEL_CSV, raw_statcast_directory
     from .run_paths import run_directory
 else:
+    from raw_statcast import MODEL_CSV, raw_statcast_directory
     from run_paths import run_directory
 
 RUN_DIR = run_directory()
-DATA_PATH = RUN_DIR / "data/raw/savant_data.csv"
 
 usecols = [
     "pitch_type",
@@ -17,7 +18,8 @@ usecols = [
 ]
 
 def main():
-    cols = pd.read_csv(DATA_PATH, nrows=0).columns.tolist()
+    data_path = raw_statcast_directory(RUN_DIR / "data/raw") / MODEL_CSV
+    cols = pd.read_csv(data_path, nrows=0).columns.tolist()
     available_cols = [c for c in usecols if c in cols]
 
     if not available_cols:
@@ -31,7 +33,7 @@ def main():
     pitcher_ids = set()
     batter_ids = set()
 
-    for chunk in pd.read_csv(DATA_PATH, usecols=available_cols, chunksize=100_000):
+    for chunk in pd.read_csv(data_path, usecols=available_cols, chunksize=100_000):
         if "pitch_type" in chunk.columns:
             pitch_counts = pitch_counts.add(
                 chunk["pitch_type"].value_counts(dropna=False),

@@ -1,11 +1,17 @@
 import argparse
 from datetime import date
+from pathlib import Path
+import shutil
+from tempfile import TemporaryDirectory
+from uuid import uuid4
 
 import pandas as pd
 
 if __package__:
+    from .raw_statcast import COLUMNS_FILE, CURRENT, GENERATIONS, MODEL_CSV, OUTCOME_CSV
     from .run_paths import run_directory
 else:
+    from raw_statcast import COLUMNS_FILE, CURRENT, GENERATIONS, MODEL_CSV, OUTCOME_CSV
     from run_paths import run_directory
 
 
@@ -89,17 +95,6 @@ OPTIONAL_DETAIL_COLS = [
     "iso_value",
 ]
 
-MODEL_OUTPUT_PATH = RAW_DIR / "savant_data.csv"
-WIDE_OUTPUT_PATH = RAW_DIR / "savant_data_with_outcome.csv"
-COLUMN_LIST_PATH = RAW_DIR / "statcast_columns.txt"
-
-
-def save_column_list(cols):
-    with open(COLUMN_LIST_PATH, "w", encoding="utf-8") as f:
-        for col in cols:
-            f.write(f"{col}\n")
-
-
 def print_col_status(cols, target_cols, title):
     print(f"\n===== {title} =====")
     for col in target_cols:
@@ -111,8 +106,7 @@ def main(start_date=None, end_date=None):
 
     start_date = START_DATE if start_date is None else start_date
     end_date = END_DATE if end_date is None else end_date
-    RAW_DIR.mkdir(parents=True, exist_ok=True)
-    
+
     cache.enable()
     print("===== Statcast 데이터 다운로드 =====")
     print("기간:", start_date, "~", end_date)
@@ -136,11 +130,9 @@ def main(start_date=None, end_date=None):
     print(df.shape)
 
     cols = df.columns.tolist()
-    save_column_list(cols)
 
     print("\n===== 전체 컬럼 수 =====")
     print(len(cols))
-    print("컬럼 목록 저장:", COLUMN_LIST_PATH)
 
     print_col_status(cols, MODEL_COLS, "현재 피치타입 예측 모델 컬럼 존재 여부")
     print_col_status(cols, OUTCOME_COLS, "기대득점/승리확률 관련 컬럼 존재 여부")
@@ -151,26 +143,13 @@ def main(start_date=None, end_date=None):
     if missing_model_cols:
         raise ValueError(f"현재 모델 필수 컬럼 누락: {missing_model_cols}")
 
-    # 1. 현재 프로젝트용 파일 저장
     model_df = df[MODEL_COLS].copy()
-    model_df.to_csv(MODEL_OUTPUT_PATH, index=False, encoding="utf-8-sig")
-
-    print("\n===== 현재 모델용 CSV 저장 완료 =====")
-    print(MODEL_OUTPUT_PATH)
-    print(model_df.shape)
-
-    # 2. 기대득점 기반 후속 모델용 넓은 파일 저장
     wide_cols = []
     for col in MODEL_COLS + OUTCOME_COLS + OPTIONAL_DETAIL_COLS:
         if col in cols and col not in wide_cols:
             wide_cols.append(col)
 
     wide_df = df[wide_cols].copy()
-    wide_df.to_csv(WIDE_OUTPUT_PATH, index=False, encoding="utf-8-sig")
-
-    print("\n===== 후속 확장용 CSV 저장 완료 =====")
-    print(WIDE_OUTPUT_PATH)
-    print(wide_df.shape)
 
     print("\n===== delta_run_exp 확인 =====")
     if "delta_run_exp" in df.columns:
@@ -192,6 +171,32 @@ def main(start_date=None, end_date=None):
 
     print("\n===== pitch_type 분포 =====")
     print(model_df["pitch_type"].value_counts(dropna=False).head(30))
+
+    generations = RAW_DIR / GENERATIONS
+    generations.mkdir(parents=True, exist_ok=True)
+    generation = uuid4().hex
+    published = generations / generation
+    with TemporaryDirectory(prefix=".statcast-", dir=RAW_DIR) as temporary:
+        staging = Path(temporary)
+        bundle = staging / generation
+        bundle.mkdir()
+        model_df.to_csv(bundle / MODEL_CSV, index=False, encoding="utf-8-sig")
+        wide_df.to_csv(bundle / OUTCOME_CSV, index=False, encoding="utf-8-sig")
+        (bundle / COLUMNS_FILE).write_text("".join(f"{col}\n" for col in cols), encoding="utf-8")
+        pointer = staging / CURRENT
+        pointer.write_text(generation + "\n", encoding="utf-8")
+        bundle.rename(published)
+        try:
+            pointer.replace(RAW_DIR / CURRENT)
+        except OSError:
+            shutil.rmtree(published)
+            raise
+
+    print("\n===== Statcast 수집 저장 완료 =====")
+    print(published)
+    print(MODEL_CSV, model_df.shape)
+    print(OUTCOME_CSV, wide_df.shape)
+    print(COLUMNS_FILE)
 
 
 def cli(argv=None):

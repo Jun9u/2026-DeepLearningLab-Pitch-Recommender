@@ -283,9 +283,11 @@ python -u src/export_serving_artifacts.py
 - 테스트가 한 구뿐이거나 관측값이 모두 같으면 R²는 정의되지 않습니다. 진단 JSON에는 `null`, 평가 CSV에는 빈 값으로 기록합니다.
 - 자동 통합 테스트는 합성 Statcast 응답으로 실행 경로, 학습, 서빙 파일 생성과 API 응답을 확인합니다. [테스트 실행 방법](tests/README.md)
 
+수집 명령은 두 CSV와 열 목록을 `data/raw/statcast/<수집 ID>/`에 함께 저장합니다. 세 파일을 모두 저장하면 `data/raw/statcast-current`를 교체하고, 이후 실행하는 전처리 명령은 그 수집본을 읽습니다. 이전 수집본도 남습니다. 여러 날짜 범위를 동시에 처리할 때는 각 실험에 별도의 `PITCH_RUN_DIR`를 사용하세요.
+
 ### 경기 단위 시간 분할 실험
 
-새 `PITCH_RUN_DIR`에 `data/raw/savant_data.csv`와 `data/raw/savant_data_with_outcome.csv`를 준비합니다. 같은 경기의 투구와 같은 날짜 경기가 서로 다른 분할에 들어가지 않도록, 경기 수 기준 70/10/20에 가까운 날짜 경계를 선택합니다. 날짜가 최소 3개 필요하며 생성한 분할 CSV를 실험 입력과 함께 보관합니다.
+새 `PITCH_RUN_DIR`에서 수집 명령을 실행하거나, 수집본을 직접 준비할 경우 `data/raw/`에 `savant_data.csv`와 `savant_data_with_outcome.csv`를 둡니다. `statcast-current`가 없는 실행 경로는 이 기존 파일 배치를 읽습니다. 같은 경기의 투구와 같은 날짜 경기가 서로 다른 분할에 들어가지 않도록, 경기 수 기준 70/10/20에 가까운 날짜 경계를 선택합니다. 날짜가 최소 3개 필요하며 생성한 분할 CSV를 실험 입력과 함께 보관합니다.
 
 ```bash
 export PITCH_RUN_DIR="$PWD/runs/statcast-game-split"
