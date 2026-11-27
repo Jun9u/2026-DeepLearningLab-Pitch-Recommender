@@ -1,14 +1,15 @@
 import pandas as pd
 
 if __package__:
+    from .raw_statcast import MODEL_CSV, raw_statcast_directory
     from .run_paths import run_directory
     from .sequence_helpers import add_runner_flags, sort_pitches
 else:
+    from raw_statcast import MODEL_CSV, raw_statcast_directory
     from run_paths import run_directory
     from sequence_helpers import add_runner_flags, sort_pitches
 
 RUN_DIR = run_directory()
-RAW_PATH = RUN_DIR / "data/raw/savant_data.csv"
 OUT_PATH = RUN_DIR / "data/processed/clean_pitch_data.csv"
 
 USE_COLS = [
@@ -34,7 +35,8 @@ USE_COLS = [
 ]
 
 def main():
-    df = pd.read_csv(RAW_PATH, usecols=USE_COLS)
+    raw_path = raw_statcast_directory(RUN_DIR / "data/raw") / MODEL_CSV
+    df = pd.read_csv(raw_path, usecols=USE_COLS)
 
     print("원본 크기:", df.shape)
 

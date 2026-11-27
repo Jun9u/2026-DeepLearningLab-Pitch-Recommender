@@ -8,8 +8,10 @@ from pathlib import Path
 import pandas as pd
 
 if __package__:
+    from .raw_statcast import MODEL_CSV, raw_statcast_directory
     from .run_paths import run_directory
 else:
+    from raw_statcast import MODEL_CSV, raw_statcast_directory
     from run_paths import run_directory
 
 
@@ -93,7 +95,7 @@ def split_indices(frame, *, with_validation=True, manifest_bytes=None):
 
 def main():
     root = run_directory()
-    source = root / "data/raw/savant_data.csv"
+    source = raw_statcast_directory(root / "data/raw") / MODEL_CSV
     output = root / "data/processed/game_split.csv"
     manifest = build_game_split(pd.read_csv(source, usecols=GAME_COLUMNS))
     output.parent.mkdir(parents=True, exist_ok=True)

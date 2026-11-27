@@ -6,10 +6,12 @@ import numpy as np
 
 if __package__:
     from .game_split import split_indices
+    from .raw_statcast import OUTCOME_CSV, raw_statcast_directory
     from .run_paths import run_directory
     from .sequence_helpers import add_runner_flags, iter_pitch_histories, left_pad as left_pad, unique_pitches
 else:
     from game_split import split_indices
+    from raw_statcast import OUTCOME_CSV, raw_statcast_directory
     from run_paths import run_directory
     from sequence_helpers import add_runner_flags, iter_pitch_histories, left_pad as left_pad, unique_pitches
 
@@ -19,7 +21,6 @@ else:
 # =========================
 
 RUN_DIR = run_directory()
-INPUT_PATH = RUN_DIR / "data/raw/savant_data_with_outcome.csv"
 OUT_PATH = RUN_DIR / "data/processed/outcome_sequence_data.csv"
 
 MIN_PITCH_COUNT = 500
@@ -70,16 +71,17 @@ def main(*, train_only_rare_pitches=False, keep_unlabeled_history=False):
     if train_only_rare_pitches and not game_split_enabled:
         raise ValueError("--train-only-rare-pitches requires PITCH_GAME_SPLIT")
 
-    if not INPUT_PATH.exists():
-        raise FileNotFoundError(f"파일이 없습니다: {INPUT_PATH}")
+    input_path = raw_statcast_directory(RUN_DIR / "data/raw") / OUTCOME_CSV
+    if not input_path.exists():
+        raise FileNotFoundError(f"파일이 없습니다: {input_path}")
 
-    cols = pd.read_csv(INPUT_PATH, nrows=0).columns.tolist()
+    cols = pd.read_csv(input_path, nrows=0).columns.tolist()
     missing = [c for c in USE_COLS if c not in cols]
 
     if missing:
         raise ValueError(f"필수 컬럼 누락: {missing}")
 
-    df = pd.read_csv(INPUT_PATH, usecols=USE_COLS)
+    df = pd.read_csv(input_path, usecols=USE_COLS)
 
     print("===== 원본 크기 =====")
     print(df.shape)
