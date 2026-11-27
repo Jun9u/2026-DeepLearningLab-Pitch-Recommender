@@ -1,12 +1,12 @@
 """Load serving artifacts and score pitch recommendations and comparisons."""
 
 from pathlib import Path
-import pickle
 
 import numpy as np
 import torch
 
 from src.empirical_ranker import EMPIRICAL_MODE, scoring_function, select_candidate_pitches
+from src.ranker_artifact import RankerArtifactUnpickler
 from src.train_lstm import load_serving_model
 from src.training_features import encode_numeric_features
 from .pitch_inputs import clean_pitch_token, encode_category, encode_pitch_history, normalize_zone
@@ -14,13 +14,6 @@ from .schemas import CompareRequest, RecommendRequest, req_to_dict
 
 
 MANUAL_CANDIDATE_FALLBACK_WARNING = "수동 후보에 지원하는 구종이 없어 자동으로 후보를 선택했습니다."
-
-
-class RankerArtifactUnpickler(pickle.Unpickler):
-    """Read the ranker's built-in containers without resolving Python classes."""
-
-    def find_class(self, module, name):
-        raise pickle.UnpicklingError(f"랭커 파일에 지원하지 않는 객체가 있습니다: {module}.{name}")
 
 
 class PitchRecommendationService:

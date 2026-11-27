@@ -123,6 +123,26 @@ LSTM 후보는 테스트 316,825구 모두에 결합됐습니다. 순위화 전 
 | 구종·위치별 단순 평균 | 0.12332 | 0.23410 | 0.01348 |
 | 볼카운트별 보정 평균 | 0.12257 | 0.23293 | 0.02328 |
 
+[Statcast 모델 릴리스](https://github.com/Jun9u/2026-DeepLearningLab-Pitch-Recommender/releases/tag/statcast-serving-2023-2025-v1)의 압축 파일과 SHA-256 파일을 저장소 루트에 내려받고, [README의 실행 환경](../README.md#5-웹-데모)에 따라 의존성을 설치합니다. 새 실행 경로에서 아래 명령을 실행하면 위 표의 관측 투구 지표를 JSON으로 확인할 수 있습니다.
+
+```bash
+(
+  set -e
+  unset PITCH_GAME_SPLIT
+  export PITCH_RUN_DIR="$PWD/runs/statcast-2026-eval"
+  sha256sum -c statcast-serving-2023-2025.tar.gz.sha256
+  mkdir -p runs
+  tar -xzf statcast-serving-2023-2025.tar.gz -C runs
+  python -u src/download_statcast.py --start-date 2026-03-25 --end-date 2026-09-27
+  python -u src/make_outcome_sequence.py
+  python -m src.evaluate_serving_ranker \
+    --sequence-csv "$PITCH_RUN_DIR/data/processed/outcome_sequence_data.csv" \
+    --release-dir runs/statcast-serving-2023-2025
+)
+```
+
+평가 명령은 릴리스 매니페스트에 기록된 랭커 SHA-256과 적합 종료일을 확인합니다. 모든 점수 방식이 같은 관측 투구를 채점하며, 새 구종은 릴리스 통계의 `OTHER`로 처리합니다. 원본 Statcast의 정정이나 수집 누락 여부를 확인할 때는 출력의 경기 수, 투구 수 및 시퀀스 SHA-256을 대조하세요. 당시 시퀀스 SHA-256은 `8f5a675483575a937b88f35cee493c11e35912f318d75562247d7b842e1d3e40`입니다.
+
 같은 기간에 모델의 LSTM 예측과 자동 후보 생성 규칙을 재생하고 두 점수 방식에 동일한 후보 조합을 입력했습니다. 볼카운트 방식에서 1위 구종·위치가 324,027구(61.10%)에서 바뀌었고 1위에 오른 고유 조합은 89개에서 40개로 줄었습니다. 가장 자주 추천된 싱커 `Z9`의 1위 비율은 10.20%에서 15.97%로 늘었습니다. 평가에서 관측된 투구를 예측하는 오차는 비교할 수 있으며, 추천을 따랐을 때의 실점 효과는 별도 평가가 필요합니다.
 
 ## 공개 데모와 서빙 모델 배포
